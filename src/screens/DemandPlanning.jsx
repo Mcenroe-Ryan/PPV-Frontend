@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
+
+import React, { useState, useEffect, useRef, useMemo, forwardRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import {
@@ -10,50 +11,40 @@ import {
   Chip,
   Divider,
   IconButton,
-  InputAdornment,
-  Menu,
-  MenuItem,
-  Stack,
-  Tab,
-  Tabs,
-  TextField,
-  Toolbar,
-  Typography,
   ListItemText,
   List,
   ListItem,
+  Menu,
+  MenuItem,
+  Stack,
+  TextField,
+  Toolbar,
+  Typography,
   CircularProgress,
   Dialog,
   Slide,
+  Card,
+  CardContent,
+  FormControlLabel,
+  Tabs,
+  Tab,
 } from "@mui/material";
 import {
   ChevronRight as ChevronRightIcon,
   ChatBubbleOutline,
-  Edit,
   MoreVert,
-  Notifications as NotificationsIcon,
   Search as SearchIcon,
 } from "@mui/icons-material";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import { format, addMonths, subMonths } from "date-fns";
+import { format, addMonths, subMonths, parse } from "date-fns";
 import DateFilter from "./components/DateFilter";
-import ModelComparisonSection from "./components/RecommendedModelsSection";
-import ForecastTable from "./components/ForecastTable";
-import { ChartSection } from "./components/ChartSection";
-import { AlertProvider } from "./components/AlertContext";
-import Chart from "./components/Messaging";
 import ChatBot from "./components/Chatbox";
-import { AnalyticsFrameSection } from "./components/AnalyticsFrameSection";
-import ScenarioSection from "./components/ScenarioSection";
 
-// const API_BASE_URL = import.meta.env.VITE_API_URL;
-const API_BASE_URL = 'http://localhost:5000/api';
+// Highcharts
+import Highcharts from "highcharts";
+import HighchartsReact from "highcharts-react-official";
 
-function getSelectedNames(selectedIds, options, optionKey, displayKey) {
-  return options
-    .filter((opt) => selectedIds.includes(opt[optionKey]))
-    .map((opt) => opt[displayKey]);
-}
+const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 const Listbox = () => {
   const listItems = [{ id: 1, label: "Product Name" }];
@@ -61,11 +52,8 @@ const Listbox = () => {
   const handleToggle = (value) => () => {
     const currentIndex = checked.indexOf(value);
     const newChecked = [...checked];
-    if (currentIndex === -1) {
-      newChecked.push(value);
-    } else {
-      newChecked.splice(currentIndex, 1);
-    }
+    if (currentIndex === -1) newChecked.push(value);
+    else newChecked.splice(currentIndex, 1);
     setChecked(newChecked);
   };
   return (
@@ -124,15 +112,6 @@ const Listbox = () => {
   );
 };
 
-const DATA_ROW_OPTIONS = [
-  { key: "all", label: "All" },
-  { key: "sales", label: "Sales" },
-  { key: "promotion", label: "Promotion / Marketing" },
-  { key: "inventory", label: "Inventory Level" },
-  { key: "stockout", label: "Stock out days" },
-  { key: "onhand", label: "On Hand" },
-];
-
 function MultiSelectWithCheckboxes({
   label,
   options = [],
@@ -145,7 +124,7 @@ function MultiSelectWithCheckboxes({
   loading = false,
   disabled = false,
   onOpen,
-  single = false, 
+  single = false,
 }) {
   const [anchorEl, setAnchorEl] = useState(null);
   const [search, setSearch] = useState("");
@@ -178,21 +157,16 @@ function MultiSelectWithCheckboxes({
   }, [anchorEl]);
 
   const handleSelectAll = () => {
-    if (single) return; 
+    if (single) return;
     setSelected(isAllSelected ? [] : safeOptions.map((opt) => opt[optionKey]));
   };
 
   const handleToggle = (value) => {
     if (single) {
-    
-      if (selected.length === 0) {
-        setSelected([value]);
-      } else if (selected[0] === value) {
-        setSelected([]);
-      }
+      if (selected.length === 0) setSelected([value]);
+      else if (selected[0] === value) setSelected([]);
       return;
     }
-
     setSelected((prev) =>
       prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
     );
@@ -200,7 +174,11 @@ function MultiSelectWithCheckboxes({
 
   const getButtonLabel = () => {
     if (selected.length === 0) return label;
-    if (selected.length === 1) {
+    if (single && selected.length === 1) {
+      const found = safeOptions.find((opt) => opt[optionKey] === selected[0]);
+      return found?.[displayKey || optionKey] || label;
+    }
+    if (!single && selected.length === 1) {
       const found = safeOptions.find((opt) => opt[optionKey] === selected[0]);
       return found?.[displayKey || optionKey] || label;
     }
@@ -226,31 +204,35 @@ function MultiSelectWithCheckboxes({
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          "& .MuiButton-endIcon": {
-            marginLeft: 0,
-            marginRight: 0,
-          },
+          width,
+          "& .MuiButton-endIcon": { m: 0 },
         }}
         disabled={disabled}
+        endIcon={
+          !single && selected.length > 0 ? (
+            <Stack direction="row" alignItems="center" spacing={0.5}>
+              <Chip
+                label={selected.length}
+                size="small"
+                color="primary"
+                sx={{ height: 20 }}
+              />
+              <KeyboardArrowDownIcon
+                sx={{ width: 16, height: 16, color: "#757575" }}
+              />
+            </Stack>
+          ) : (
+            <KeyboardArrowDownIcon
+              sx={{ width: 16, height: 16, color: "#757575" }}
+            />
+          )
+        }
       >
         <Box sx={{ display: "flex", alignItems: "center" }}>
           {getButtonLabel()}
         </Box>
-
-        <Box sx={{ display: "flex", alignItems: "center", ml: 1 }}>
-          {!single && selected.length > 0 && (
-            <Chip
-              label={selected.length}
-              size="small"
-              color="primary"
-              sx={{ mr: 0.5, height: 20 }}
-            />
-          )}
-          <KeyboardArrowDownIcon
-            sx={{ width: 16, height: 16, color: "#757575" }}
-          />
-        </Box>
       </Button>
+
       <Menu
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
@@ -267,6 +249,7 @@ function MultiSelectWithCheckboxes({
             fullWidth
           />
         </Box>
+
         {loading ? (
           <MenuItem disabled>
             <CircularProgress size={20} sx={{ mr: 1 }} /> Loading...
@@ -285,11 +268,11 @@ function MultiSelectWithCheckboxes({
             ...filteredOptions.map((option) => {
               const val = option[optionKey];
               const isSelected = selected.includes(val);
-              const isInactive = single && selected.length === 1 && !isSelected; // disable others
+              const isInactive = single && selected.length === 1 && !isSelected;
 
               return (
                 <MenuItem
-                  key={val}
+                  key={String(val)}
                   onClick={() => handleToggle(val)}
                   dense
                   disabled={isInactive}
@@ -314,49 +297,1090 @@ function MultiSelectWithCheckboxes({
   );
 }
 
-const SlideTransition = React.forwardRef(function Transition(props, ref) {
+const SlideTransition = forwardRef(function Transition(props, ref) {
   return <Slide direction="left" ref={ref} {...props} />;
 });
 
-export const DemandProjectMonth = () => {
+const DataVisualizationSection = ({
+  savingsCards,
+  startDate,
+  endDate,
+  countryIds = [],
+  stateIds = [],
+  plantIds = [],
+  skuIds = [],
+  supplierIds = [],
+  supplierLocations = [],
+}) => {
   const navigate = useNavigate();
-  const [alertCount, setAlertCount] = useState(null);
-  const [alertCountLoading, setAlertCountLoading] = useState(true);
-  const [dateFilterKey, setDateFilterKey] = useState(0);
 
+  const [selectedTab, setSelectedTab] = useState(0);
+  const [selectedPeriod, setSelectedPeriod] = useState("M");
+
+  // Base line chart
+  const [lineCategories, setLineCategories] = useState([]);
+  const [lineSeries, setLineSeries] = useState([]);
+  const [chartLoading, setChartLoading] = useState(false);
+
+  // Toggles
+  const [showForecast, setShowForecast] = useState(true);
+  const [showAlerts, setShowAlerts] = useState(false);
+  const [showGlobal, setShowGlobal] = useState(false);
+
+  // Alerts overlay (scatter dots)
+  const [alertsRaw, setAlertsRaw] = useState([]);
+  const [alertSeries, setAlertSeries] = useState([]);
+
+  // Global Events overlay (vertical bars)
+  const [globalRaw, setGlobalRaw] = useState([]);
+  const [xPlotBands, setXPlotBands] = useState([]); // bars on xAxis
+  const [eventsByX, setEventsByX] = useState({}); 
+
+  /* Helpers */
+  const firstOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
+  const monthKey = (d) => format(d, "yyyy-MM");
+  const buildMonthlyRange = (start, end) => {
+    const out = [];
+    const d = new Date(start.getFullYear(), start.getMonth(), 1);
+    const stop = new Date(end.getFullYear(), end.getMonth(), 1);
+    while (d <= stop) {
+      out.push(new Date(d));
+      d.setMonth(d.getMonth() + 1);
+    }
+    return out;
+  };
+
+  /* --------- Fetch base line chart (actual + forecast) --------- */
   useEffect(() => {
-    const fetchAlertCount = async () => {
-      setAlertCountLoading(true);
+    if (!startDate || !endDate) return;
+
+    const controller = new AbortController();
+    const fetchChart = async () => {
+      setChartLoading(true);
       try {
-        const response = await fetch(`${API_BASE_URL}/getAlertCount`);
-        if (response.ok) {
-          const count = await response.json();
-          setAlertCount(count);
-        } else {
-          setAlertCount(null);
+        const payload = {
+          startDate,
+          endDate,
+          countryIds,
+          stateIds,
+          plantIds,
+          skuIds,
+          supplierIds,
+          supplierLocations,
+          includeForecast: true, 
+        };
+
+        const { data } = await axios.post(
+          `${API_BASE_URL}/getLineChart`,
+          payload,
+          { signal: controller.signal }
+        );
+
+        const rows = Array.isArray(data) ? data : [];
+
+        // Build X from the selected date range (guarantees months like 2026-04 show)
+        const from = firstOfMonth(new Date(startDate));
+        const to = firstOfMonth(new Date(endDate));
+        const months = buildMonthlyRange(from, to);
+        const categories = months.map((d) => format(d, "MMM yyyy"));
+        setLineCategories(categories);
+
+        // Build per-supplier series (actual vs forecast)
+        const bySupplier = new Map();
+
+        for (const r of rows) {
+          const supplier = r.supplier_name || "Supplier";
+          const m = firstOfMonth(new Date(r.forecast_month));
+          const idx = months.findIndex(
+            (d) => d.getFullYear() === m.getFullYear() && d.getMonth() === m.getMonth()
+          );
+          if (idx === -1) continue;
+
+          const value = Number(r.ppv_variance_percentage);
+          const type = (r.forecast_type || "actual").toLowerCase();
+
+          if (!bySupplier.has(supplier)) {
+            bySupplier.set(supplier, {
+              actual: Array(months.length).fill(null),
+              forecast: Array(months.length).fill(null),
+            });
+          }
+          const bucket = bySupplier.get(supplier);
+
+          if (type === "forecast") bucket.forecast[idx] = isFinite(value) ? value : null;
+          else bucket.actual[idx] = isFinite(value) ? value : null;
         }
-      } catch (error) {
-        console.error("Error fetching alert count:", error);
-        setAlertCount(null);
+
+        // Ensure forecast starts AFTER last actual month (visually split)
+        const colorBy = {
+          "Global Parts Inc.": "#22c55e",
+          "AutoMech Gumby": "#60a5fa",
+          "AutoMech Gumbys": "#60a5fa",
+          "Bharat Supplies": "#eab308",
+        };
+
+        const seriesOut = [];
+        for (const [name, { actual, forecast }] of bySupplier.entries()) {
+          // Find last index with an actual value
+          let lastActualIdx = -1;
+          for (let i = actual.length - 1; i >= 0; i--) {
+            if (typeof actual[i] === "number") {
+              lastActualIdx = i;
+              break;
+            }
+          }
+
+          // Null-out any forecast points up to and including last actual month
+          const forecastTrimmed = forecast.map((v, i) =>
+            i <= lastActualIdx ? null : v
+          );
+
+          // Actual series (solid)
+          seriesOut.push({
+            name,
+            type: "line",
+            data: actual,
+            color: colorBy[name],
+            marker: { enabled: true, radius: 3 },
+            lineWidth: 2,
+            tooltip: { valueSuffix: "%" },
+            zIndex: 2,
+          });
+
+          // Forecast series (dotted), only if toggle is on and any values exist
+          if (showForecast && forecastTrimmed.some((v) => typeof v === "number")) {
+            seriesOut.push({
+              name: `${name} (Forecast)`,
+              type: "line",
+              data: forecastTrimmed,
+              color: colorBy[name],
+              dashStyle: "ShortDash", 
+              marker: { enabled: true, radius: 3 },
+              lineWidth: 2,
+              tooltip: { valueSuffix: "%" },
+              zIndex: 1,
+            });
+          }
+        }
+
+        setLineSeries(seriesOut);
+      } catch (e) {
+        if (axios.isCancel?.(e)) return;
+        setLineCategories([]);
+        setLineSeries([]);
       } finally {
-        setAlertCountLoading(false);
+        setChartLoading(false);
       }
     };
 
-    fetchAlertCount();
-  }, []);
+    fetchChart();
+    return () => controller.abort();
+    // re-run when filters/dates/toggle changes
+  }, [
+    startDate,
+    endDate,
+    countryIds,
+    stateIds,
+    plantIds,
+    skuIds,
+    supplierIds,
+    supplierLocations,
+    showForecast,
+  ]);
 
-  const tabs = [
-    { label: "Demand", count: null },
-    {
-      label: "Alerts for Forecast Error",
-      count: alertCountLoading ? "..." : alertCount,
+  /* --------- Alerts overlay --------- */
+  const fetchAlerts = async () => {
+    try {
+      const { data } = await axios.get(`${API_BASE_URL}/getAlerts`);
+      setAlertsRaw(Array.isArray(data) ? data : []);
+    } catch {
+      setAlertsRaw([]);
+    }
+  };
+
+  useEffect(() => {
+    if (!showAlerts || !lineCategories.length || !lineSeries.length) {
+      setAlertSeries([]);
+      return;
+    }
+
+    const emojiToColor = (emoji) => {
+      switch (emoji) {
+        case "🔴":
+          return "#ef4444";
+        case "🟠":
+          return "#f59e0b";
+        case "🟡":
+          return "#eab308";
+        case "🟢":
+          return "#22c55e";
+        default:
+          return "#3b82f6";
+      }
+    };
+
+    // Map base supplier series by normalized name (without " (Forecast)")
+    const seriesBySupplier = new Map(
+      lineSeries
+        .filter((s) => s.type === "line")
+        .map((s) => [s.name.replace(" (Forecast)", ""), s])
+    );
+
+    const points = [];
+    for (const a of alertsRaw) {
+      const date = new Date(a.date_value);
+      const cat = format(firstOfMonth(date), "MMM yyyy");
+      const xIndex = lineCategories.indexOf(cat);
+      if (xIndex === -1) continue;
+
+      const supplierSeries = seriesBySupplier.get(a.supplier_name);
+      if (!supplierSeries) continue;
+
+      const yVal = supplierSeries.data?.[xIndex];
+      if (yVal == null || Number.isNaN(yVal)) continue;
+
+      points.push({
+        x: xIndex,
+        y: yVal,
+        name: a.alert_type,
+        marker: {
+          symbol: "circle",
+          radius: 6,
+          fillColor: emojiToColor(a.marker_color_emoji),
+          lineColor: "#ffffff",
+          lineWidth: 1.5,
+        },
+        custom: {
+          tooltip: a.tooltip,
+          severity: a.severity,
+          supplier: a.supplier_name,
+          emoji: a.marker_color_emoji,
+          plant: a.plant_name,
+          sku: a.sku_name,
+        },
+      });
+    }
+
+    setAlertSeries(
+      points.length
+        ? [
+            {
+              name: "Alerts",
+              type: "scatter",
+              data: points,
+              zIndex: 10,
+              enableMouseTracking: true,
+              tooltip: { pointFormat: "" },
+            },
+          ]
+        : []
+    );
+  }, [showAlerts, alertsRaw, lineCategories, lineSeries]);
+
+  const combinedSeries = useMemo(
+    () => (showAlerts ? [...lineSeries, ...alertSeries] : lineSeries),
+    [lineSeries, alertSeries, showAlerts]
+  );
+
+  const handleAlertsToggle = async (e) => {
+    const checked = e.target.checked;
+    setShowAlerts(checked);
+    if (checked && alertsRaw.length === 0) {
+      await fetchAlerts();
+    }
+  };
+
+  /* --------- Global Events overlay (vertical bars) --------- */
+  const fetchGlobalEvents = async () => {
+    try {
+      const { data } = await axios.get(`${API_BASE_URL}/getGlobalEvents`);
+      setGlobalRaw(Array.isArray(data) ? data : []);
+    } catch {
+      setGlobalRaw([]);
+    }
+  };
+
+  useEffect(() => {
+    if (!showGlobal || !lineCategories.length) {
+      setXPlotBands([]);
+      setEventsByX({});
+      return;
+    }
+
+    const impactColor = (impact) => {
+      switch ((impact || "").toLowerCase()) {
+        case "high":
+          return "rgba(244, 63, 94, 0.28)";
+        case "medium":
+          return "rgba(245, 158, 11, 0.22)";
+        case "low":
+          return "rgba(59, 130, 246, 0.18)";
+        default:
+          return "rgba(107,114,128,0.18)";
+      }
+    };
+
+    const bands = [];
+    const byX = {};
+
+    globalRaw.forEach((ev, idx) => {
+      const d = new Date(ev.date_value);
+      const cat = format(firstOfMonth(d), "MMM yyyy");
+      const xIdx = lineCategories.indexOf(cat);
+      if (xIdx === -1) return;
+
+      const width = 0.32; // narrow bar
+      bands.push({
+        id: `ge-${idx}-${xIdx}`,
+        from: xIdx - width / 2,
+        to: xIdx + width / 2,
+        color: impactColor(ev.impact_level),
+        zIndex: 3,
+      });
+
+      if (!byX[xIdx]) byX[xIdx] = [];
+      (byX[xIdx] || []).push(ev);
+    });
+
+    setXPlotBands(bands);
+    setEventsByX(byX);
+  }, [showGlobal, globalRaw, lineCategories]);
+
+  const handleGlobalToggle = async (e) => {
+    const checked = e.target.checked;
+    setShowGlobal(checked);
+    if (checked && globalRaw.length === 0) {
+      await fetchGlobalEvents();
+    }
+  };
+
+  /* --------- Highcharts options (dynamic Y-range) --------- */
+const options = useMemo(() => {
+  // Collect all numeric y values (exclude scatter)
+  const allY = [];
+  combinedSeries.forEach((s) => {
+    if (s.type === "line") {
+      (s.data || []).forEach((v) => {
+        if (typeof v === "number" && isFinite(v)) allY.push(v);
+      });
+    }
+  });
+  const yMin = allY.length ? Math.min(...allY) : -15;
+  const yMax = allY.length ? Math.max(...allY) : 15;
+  const pad = Math.max(2, (yMax - yMin) * 0.1);
+  const softMin = Math.min(yMin - pad, -15);
+  const softMax = Math.max(yMax + pad, 15);
+
+  return {
+    chart: {
+      height: 440,
+      spacing: [10, 16, 16, 16],
+      backgroundColor: "transparent",
     },
-    { label: "Compare Model", count: null },
-    { label: "Analytics", count: null },
-    { label: "Scenarios", count: null },
-  ];
+    title: { text: null },
+    credits: { enabled: false },
+    exporting: { enabled: false },
+    xAxis: {
+      categories: lineCategories,
+      tickmarkPlacement: "on",
+      lineColor: "rgba(0,0,0,0.15)",
+      tickColor: "rgba(0,0,0,0.2)",
+      gridLineWidth: 1,
+      gridLineColor: "rgba(0,0,0,0.08)",
+      labels: { 
+        style: { 
+          color: "rgba(0,0,0,0.65)",
+          fontSize: "11px",
+          fontWeight: "500"
+        } 
+      },
+      plotBands: showGlobal ? xPlotBands : [],
+    },
+    yAxis: {
+      title: { text: null },
+      min: softMin,
+      max: softMax,
+      gridLineColor: "rgba(0,0,0,0.1)",
+      gridLineWidth: 1,
+      labels: {
+        formatter() {
+          return `${this.value}%`;
+        },
+        style: { 
+          color: "rgba(0,0,0,0.65)",
+          fontSize: "11px",
+          fontWeight: "500"
+        },
+      },
+      // Background color zones (matching screenshot)
+      plotBands: [
+        { 
+          from: 0, 
+          to: softMax, 
+          color: "rgba(255, 230, 230, 0.35)", // Light red for positive (unfavorable)
+          zIndex: 0 
+        },
+        { 
+          from: softMin, 
+          to: 0, 
+          color: "rgba(220, 250, 230, 0.35)", // Light green for negative (favorable)
+          zIndex: 0 
+        },
+      ],
+      plotLines: [
+        { 
+          value: 0, 
+          color: "rgba(0,0,0,0.3)", 
+          width: 2, 
+          zIndex: 5,
+          dashStyle: "Solid"
+        }
+      ],
+    },
+    legend: {
+      align: "left",
+      verticalAlign: "top",
+      layout: "horizontal",
+      itemStyle: { 
+        color: "rgba(0,0,0,0.75)", 
+        fontWeight: "500",
+        fontSize: "12px"
+      },
+      symbolRadius: 0,
+      symbolWidth: 16,
+      symbolHeight: 3,
+      itemMarginBottom: 8,
+    },
+    tooltip: {
+      shared: true,
+      borderColor: "rgba(0,0,0,0.15)",
+      backgroundColor: "#ffffff",
+      borderRadius: 8,
+      shadow: {
+        color: "rgba(0,0,0,0.1)",
+        offsetX: 0,
+        offsetY: 2,
+        opacity: 0.15,
+        width: 8
+      },
+      style: {
+        fontSize: "12px",
+        fontWeight: "500"
+      },
+      formatter() {
+        const header = `<b style="font-size: 13px;">${this.x}</b>`;
+        const lines = this.points.map((p) => {
+          if (p.series.type === "scatter") {
+            const c = p.point?.custom || {};
+            return `${c.emoji || "⚠️"} <b>${c.severity || "Alert"}</b> — ${
+              c.supplier || ""
+            }<br/><span style="opacity:.85; font-size: 11px;">${c.tooltip || ""}</span>`;
+          }
+          const isForecast = p.series.name.includes("Forecast");
+          const displayName = isForecast 
+            ? p.series.name.replace(" (Forecast)", "") + " (Forecast)"
+            : p.series.name;
+          return `<span style="color:${p.color}">●</span> ${displayName}: <b>${p.y}%</b>`;
+        });
 
+        if (showGlobal && this.points?.length) {
+          const xIdx =
+            this.points[0]?.point?.x ?? lineCategories.indexOf(this.x);
+          const evs = (eventsByX || {})[xIdx] || [];
+          evs.forEach((ev) => {
+            lines.push(
+              `<span style="color: #1976d2;">▌</span> <b>Global:</b> ${ev.label} — <span style="opacity:.85;">${
+                ev.country_name
+              }</span><br/><span style="opacity:.75; font-size: 11px;">${
+                ev.tooltip || ""
+              }</span>`
+            );
+          });
+        }
+        return `${header}<br/>${lines.join("<br/>")}`;
+      },
+    },
+    plotOptions: {
+      series: {
+        animation: false,
+        connectNulls: false,
+        states: { 
+          hover: { 
+            halo: { size: 8 },
+            lineWidthPlus: 1
+          }, 
+          inactive: { opacity: 0.3 } 
+        },
+      },
+      line: { 
+        marker: { 
+          lineWidth: 0,
+          radius: 4,
+          symbol: "circle"
+        },
+        lineWidth: 2.5
+      },
+      scatter: { 
+        tooltip: { pointFormat: "" },
+        marker: {
+          radius: 7
+        }
+      },
+    },
+    series: combinedSeries,
+    responsive: {
+      rules: [
+        {
+          condition: { maxWidth: 700 },
+          chartOptions: {
+            legend: { layout: "horizontal", align: "center" },
+            xAxis: { labels: { step: 2 } },
+          },
+        },
+      ],
+    },
+  };
+}, [lineCategories, combinedSeries, showGlobal, xPlotBands, eventsByX]);
+
+
+  return (
+    <Stack spacing="15px" sx={{ width: "100%" }}>
+      <Box sx={{ bgcolor: "background.paper", border: 1, borderColor: "grey.300" }}>
+        <Tabs
+          value={selectedTab}
+          onChange={(_, v) => {
+            setSelectedTab(v);
+            if (v === 2) navigate("/saq");
+          }}
+          TabIndicatorProps={{ sx: { display: "none" } }}
+          sx={{
+            minHeight: "auto",
+            px: 1,
+            "& .MuiTab-root": {
+              minHeight: "auto",
+              py: 0.75,
+              px: 1.75,
+              mr: 1,
+              textTransform: "none",
+              fontSize: 14,
+              fontWeight: 500,
+              color: "text.secondary",
+              "&:hover": { backgroundColor: "#EEF5FF" },
+            },
+            "& .MuiTab-root.Mui-selected": {
+              backgroundColor: "#DBEAFE",
+              color: "#1F2937",
+              fontWeight: 600,
+              boxShadow: "inset 0 -2px 0 #1E88E5",
+            },
+          }}
+        >
+          <Tab label="PPV Forecast" disableRipple />
+          <Tab label="Scorecard" disableRipple />
+          <Tab label="SAQ" disableRipple />
+        </Tabs>
+      </Box>
+
+      {/* Savings cards */}
+      <Card sx={{ p: "15px", border: 1, borderColor: "grey.400" }}>
+        <Stack spacing="15px">
+          <Typography
+            variant="h6"
+            sx={{ fontWeight: 600, fontSize: "16px", color: "text.secondary" }}
+          >
+            Savings by supplier in $
+          </Typography>
+
+          <Stack direction="row" spacing={2.5} flexWrap="wrap">
+            {savingsCards.map((item, index) => (
+              <Card
+                key={index}
+                sx={{ width: 262, p: 1.25, border: 1, borderColor: "grey.400" }}
+              >
+                <CardContent sx={{ p: 0, "&:last-child": { pb: 0 } }}>
+                  <Stack direction="row" spacing="15px" alignItems="center">
+                    <Avatar
+                      sx={{
+                        width: 40,
+                        height: 40,
+                        bgcolor: "rgba(68, 167, 247, 0.3)",
+                      }}
+                    >
+                      <Box
+                        component="img"
+                        src="https://c.animaapp.com/nHl4a9qr/img/cash-coin-2.svg"
+                        alt="Cash coin"
+                        sx={{ width: 25, height: 25 }}
+                      />
+                    </Avatar>
+                    <Stack spacing={0.5} flex={1}>
+                      <Typography
+                        sx={{
+                          fontFamily: "Poppins, Helvetica",
+                          fontWeight: item.isNegative ? 600 : 500,
+                          fontSize: "20px",
+                          lineHeight: "22px",
+                          color: item.color,
+                        }}
+                      >
+                        {item.amount}
+                      </Typography>
+                      <Typography
+                        sx={{
+                          fontFamily: "Poppins, Helvetica",
+                          fontWeight: 500,
+                          fontSize: "14px",
+                          lineHeight: "24px",
+                          color: "rgba(0, 0, 0, 0.5)",
+                        }}
+                      >
+                        {item.supplier}
+                      </Typography>
+                    </Stack>
+                  </Stack>
+                </CardContent>
+              </Card>
+            ))}
+          </Stack>
+        </Stack>
+      </Card>
+
+      {/* Chart */}
+      <Box
+        sx={{
+          position: "relative",
+          bgcolor: "background.paper",
+          border: 1,
+          borderColor: "grey.400",
+          width: "100%",
+          p: 1,
+        }}
+      >
+        <Stack
+          spacing="9px"
+          sx={{ position: "absolute", top: 8, left: 8, right: 8, zIndex: 2 }}
+        >
+          <Stack
+            direction="row"
+            spacing={1.25}
+            alignItems="center"
+            flexWrap="wrap"
+          >
+            <Stack direction="row" spacing={1.25}>
+              {["W", "M", "Q"].map((p) => (
+                <Box
+                  key={p}
+                  sx={{
+                    width: 38,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    px: 1.25,
+                    py: 0,
+                    borderRadius: "50px",
+                    border: 1,
+                    borderColor: "primary.dark",
+                    cursor: "pointer",
+                    bgcolor:
+                      selectedPeriod === p ? "primary.main" : "transparent",
+                  }}
+                  onClick={() => setSelectedPeriod(p)}
+                >
+                  <Typography
+                    sx={{
+                      fontWeight: 600,
+                      fontSize: "12px",
+                      color:
+                        selectedPeriod === p
+                          ? "background.paper"
+                          : "text.primary",
+                    }}
+                  >
+                    {p}
+                  </Typography>
+                </Box>
+              ))}
+            </Stack>
+
+            <Stack direction="row" spacing={1.25} alignItems="center">
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={showForecast}
+                    onChange={(e) => setShowForecast(e.target.checked)}
+                  />
+                }
+                label="6 Months Forecast"
+                sx={{
+                  "& .MuiFormControlLabel-label": {
+                    fontSize: "14px",
+                    color: "text.primary",
+                  },
+                }}
+              />
+              <KeyboardArrowDownIcon sx={{ width: 16, height: 16 }} />
+            </Stack>
+
+            <FormControlLabel
+              control={
+                <Checkbox checked={showGlobal} onChange={handleGlobalToggle} />
+              }
+              label="Global Events"
+              sx={{
+                "& .MuiFormControlLabel-label": {
+                  fontSize: "14px",
+                  color: "text.secondary",
+                },
+              }}
+            />
+            <FormControlLabel
+              control={
+                <Checkbox checked={showAlerts} onChange={handleAlertsToggle} />
+              }
+              label="Alerts"
+              sx={{
+                "& .MuiFormControlLabel-label": {
+                  fontSize: "14px",
+                  color: "text.secondary",
+                },
+              }}
+            />
+          </Stack>
+        </Stack>
+
+        <Box sx={{ pt: 6 }}>
+          {chartLoading ? (
+            <Stack
+              alignItems="center"
+              justifyContent="center"
+              sx={{ height: 420 }}
+            >
+              <CircularProgress />
+            </Stack>
+          ) : (
+            <HighchartsReact highcharts={Highcharts} options={options} />
+          )}
+        </Box>
+      </Box>
+    </Stack>
+  );
+};
+
+const SupplierDataTableSection = ({
+  startDate,
+  endDate,
+  countryIds = [],
+  stateIds = [],
+  plantIds = [],
+  skuIds = [],
+  supplierIds = [],
+  supplierLocations = [],
+}) => {
+  const [rows, setRows] = useState([]);
+  const [columns, setColumns] = useState([]); // [{ key, date }]
+  const [yearGroups, setYearGroups] = useState([]); // [{ year, months, lastIndex }]
+  const [loading, setLoading] = useState(false);
+
+  const COL_PX = 72;
+
+  const bgFor = (v) => {
+    if (v == null || Number.isNaN(v) || v === 0) return "#ffffff";
+    if (v > 0) {
+      if (v >= 10) return "#f44336";
+      if (v >= 7) return "#e57373";
+      if (v >= 4) return "#ef9a9a";
+      return "#ffcdd2";
+    } else {
+      if (v <= -13) return "#43a047";
+      if (v <= -10) return "#4caf50";
+      if (v <= -7) return "#66bb6a";
+      if (v <= -4) return "#a5d6a7";
+      return "#c8e6c9";
+    }
+  };
+  const textFor = (v, bg) => {
+    if (Math.abs(v ?? 0) >= 7) return "#ffffff";
+    if (bg === "#ef9a9a") return "#546e7a";
+    return "#607d8b";
+  };
+  const fmtCell = (v) => {
+    const n = typeof v === "string" ? parseFloat(v) : v;
+    if (!Number.isFinite(n)) return "";
+    return Number.isInteger(n) ? String(n) : n.toFixed(1);
+  };
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const payload = {
+          startDate,
+          endDate,
+          countryIds,
+          stateIds,
+          plantIds,
+          skuIds,
+          supplierIds,
+          supplierLocations,
+        };
+        const { data } = await axios.post(`${API_BASE_URL}/getHeatMap`, payload);
+        const arr = Array.isArray(data) ? data : [];
+
+        const keys = new Set();
+        arr.forEach((r) => {
+          Object.keys(r).forEach((k) => {
+            if (k !== "supplier_name") keys.add(k);
+          });
+        });
+
+        const colList = Array.from(keys)
+          .map((k) => {
+            const d = parse(k, "MMM yyyy", new Date());
+            return { key: k, date: d };
+          })
+          .sort((a, b) => a.date - b.date);
+
+        setColumns(colList);
+
+        const ymap = new Map();
+        colList.forEach((c, idx) => {
+          const y = format(c.date, "yyyy");
+          const m = format(c.date, "MMM");
+          if (!ymap.has(y))
+            ymap.set(y, { year: y, months: [], lastIndex: idx });
+          const g = ymap.get(y);
+          g.months.push(m);
+          g.lastIndex = idx;
+        });
+        setYearGroups(Array.from(ymap.values()));
+        setRows(arr);
+      } catch {
+        setRows([]);
+        setColumns([]);
+        setYearGroups([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [startDate, endDate, countryIds, stateIds, plantIds, skuIds, supplierIds, supplierLocations]);
+
+  const lastOfYearIdx = useMemo(
+    () => new Set(yearGroups.map((g) => g.lastIndex)),
+    [yearGroups]
+  );
+
+  return (
+    <Box
+      sx={{
+        width: "100%",
+        bgcolor: "#ffffff",
+        border: "1px solid #90a4ae",
+        overflowX: "auto",
+        p: 1.25,
+      }}
+    >
+      {/* Header */}
+      <Box sx={{ display: "flex", borderTop: "1px solid #e0e0e0" }}>
+        <Box
+          sx={{
+            width: 165,
+            bgcolor: "#cfd8dc",
+            borderTop: "1px solid #bdbdbd",
+            borderBottom: "1px solid #bdbdbd",
+            borderLeft: "1px solid #bdbdbd",
+            flexShrink: 0,
+          }}
+        />
+        {yearGroups.map((group, gi) => (
+          <Box
+            key={group.year}
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              width: group.months.length * COL_PX,
+              flexShrink: 0,
+            }}
+          >
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                px: 1.25,
+                py: 0.375,
+                bgcolor: "#e0e0e0",
+                borderTop: "1px solid #bdbdbd",
+                borderLeft: "1px solid #bdbdbd",
+                borderRight:
+                  gi === yearGroups.length - 1
+                    ? "1px solid #bdbdbd"
+                    : undefined,
+              }}
+            >
+              <Typography
+                sx={{
+                  fontWeight: 600,
+                  fontSize: 14,
+                  color: "#546e7a",
+                  textAlign: "center",
+                }}
+              >
+                {group.year}
+              </Typography>
+            </Box>
+
+            <Box sx={{ display: "flex" }}>
+              {group.months.map((m, mi) => {
+                const colIndex =
+                  yearGroups
+                    .slice(0, gi)
+                    .reduce((acc, g) => acc + g.months.length, 0) + mi;
+                return (
+                  <Box
+                    key={`${group.year}-${m}`}
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      px: 1.25,
+                      py: 0.625,
+                      flex: "0 0 auto",
+                      width: COL_PX,
+                      bgcolor: "#cfd8dc",
+                      borderTop: "1px solid #bdbdbd",
+                      borderBottom: "1px solid #bdbdbd",
+                      borderLeft: "1px solid #bdbdbd",
+                      borderRight: lastOfYearIdx.has(colIndex)
+                        ? "1px solid #bdbdbd"
+                        : undefined,
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        fontWeight: 600,
+                        fontSize: 14,
+                        color: "#546e7a",
+                        textAlign: "center",
+                      }}
+                    >
+                      {m}
+                    </Typography>
+                  </Box>
+                );
+              })}
+            </Box>
+          </Box>
+        ))}
+      </Box>
+
+      {/* Body */}
+      {loading ? (
+        <Stack alignItems="center" justifyContent="center" sx={{ py: 3 }}>
+          <CircularProgress />
+        </Stack>
+      ) : rows.length === 0 ? (
+        <Box sx={{ p: 2 }}>
+          <Typography variant="body2" color="text.secondary">
+            No heatmap data.
+          </Typography>
+        </Box>
+      ) : (
+        rows.map((supplier) => (
+          <Box
+            key={supplier.supplier_name}
+            sx={{
+              display: "flex",
+              height: 36,
+              alignItems: "center",
+              borderBottom: "1px solid #e0e0e0",
+            }}
+          >
+            <Box
+              sx={{
+                display: "flex",
+                width: 165,
+                alignItems: "center",
+                justifyContent: "center",
+                px: 1.25,
+                bgcolor: "#eceff1",
+                borderBottom: "1px solid #bdbdbd",
+                borderLeft: "1px solid #bdbdbd",
+                height: "100%",
+                flexShrink: 0,
+              }}
+            >
+              <Typography
+                sx={{
+                  fontWeight: 600,
+                  fontSize: 14,
+                  color: "#607d8b",
+                  textAlign: "center",
+                }}
+              >
+                {supplier.supplier_name}
+              </Typography>
+            </Box>
+
+            {columns.map((col, idx) => {
+              const raw = supplier[col.key];
+              const val =
+                typeof raw === "string" ? parseFloat(raw) : Number(raw);
+              const bg = bgFor(val);
+              const fg = textFor(val, bg);
+              return (
+                <Box
+                  key={`${supplier.supplier_name}-${col.key}`}
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    px: 1.25,
+                    flex: "0 0 auto",
+                    width: 72,
+                    bgcolor: bg,
+                    borderBottom: "1px solid #bdbdbd",
+                    borderLeft: "1px solid #bdbdbd",
+                    borderRight: lastOfYearIdx.has(idx)
+                      ? "1px solid #bdbdbd"
+                      : undefined,
+                    height: "100%",
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontWeight: 500,
+                      fontSize: 14,
+                      color: fg,
+                      textAlign: "right",
+                      width: "100%",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {fmtCell(val)}
+                  </Typography>
+                </Box>
+              );
+            })}
+          </Box>
+        ))
+      )}
+
+      <Box
+        component="img"
+        src="https://c.animaapp.com/nHl4a9qr/img/frame-6680-1.svg"
+        alt="Frame"
+        sx={{ width: "100%", height: 8, mt: 1.875 }}
+      />
+    </Box>
+  );
+};
+
+export const DemandProjectMonth = () => {
+  const navigate = useNavigate();
+
+  // Horizontal drag state for the toolbar row
   const scrollRef = useRef(null);
   const isDown = useRef(false);
   const startX = useRef(0);
@@ -364,147 +1388,75 @@ export const DemandProjectMonth = () => {
 
   const handleMouseDown = (e) => {
     isDown.current = true;
+    if (!scrollRef.current) return;
     scrollRef.current.classList.add("dragging");
     startX.current = e.pageX - scrollRef.current.offsetLeft;
     scrollLeft.current = scrollRef.current.scrollLeft;
   };
-
   const handleMouseLeave = () => {
     isDown.current = false;
+    if (!scrollRef.current) return;
     scrollRef.current.classList.remove("dragging");
   };
-
   const handleMouseUp = () => {
     isDown.current = false;
+    if (!scrollRef.current) return;
     scrollRef.current.classList.remove("dragging");
   };
-
   const handleMouseMove = (e) => {
-    if (!isDown.current) return;
+    if (!isDown.current || !scrollRef.current) return;
     e.preventDefault();
     const x = e.pageX - scrollRef.current.offsetLeft;
     const walk = (x - startX.current) * 1.5;
     scrollRef.current.scrollLeft = scrollLeft.current - walk;
   };
 
-  const [showActivities, setShowActivities] = useState(false);
-
+  // Date range for the filter
+  const [dateFilterKey, setDateFilterKey] = useState(0);
   const [dateRange, setDateRange] = useState({
     startDate: format(subMonths(new Date("2024-12-01"), 6), "yyyy-MM-dd"),
     endDate: format(addMonths(new Date("2025-12-31"), 6), "yyyy-MM-dd"),
   });
 
-  const [activeTab, setActiveTab] = useState(0);
-
+  // Filter datasets
   const [filtersData, setFiltersData] = useState({
     countries: [],
     states: [],
-    cities: [],
     plants: [],
-    categories: [],
     skus: [],
-    channels: [],
+    suppliers: [],
+    supplierLocations: [], // [{ supplier_location: 'USA' }]
   });
 
-  const handleOpenActivities = () => setShowActivities(true);
-  const handleCloseActivities = () => setShowActivities(false);
-
+  // Selected filters
   const [selectedCountry, setSelectedCountry] = useState([]);
   const [selectedState, setSelectedState] = useState([]);
-  const [selectedCities, setSelectedCities] = useState([]);
   const [selectedPlants, setSelectedPlants] = useState([]);
-  const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedSKUs, setSelectedSKUs] = useState([]);
-  const [selectedChannels, setSelectedChannels] = useState([]);
+  const [selectedSuppliers, setSelectedSuppliers] = useState([]); // supplier_id[]
+  const [selectedSupplierLocations, setSelectedSupplierLocations] = useState([]); // country strings
 
+  // Loading flags
   const [loadingCountries, setLoadingCountries] = useState(false);
   const [loadingStates, setLoadingStates] = useState(false);
-  const [loadingCities, setLoadingCities] = useState(false);
   const [loadingPlants, setLoadingPlants] = useState(false);
-  const [loadingCategories, setLoadingCategories] = useState(false);
   const [loadingSkus, setLoadingSkus] = useState(false);
-  const [loadingChannels, setLoadingChannels] = useState(false);
-  const [models, setModels] = useState([]);
-  const [loadingModels, setLoadingModels] = useState(false);
-  const [modelName, setModelName] = useState("XGBoost");
-  const [canEditConsensus, setCanEditConsensus] = useState(false);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(false);
+  const [loadingSupplierLocations, setLoadingSupplierLocations] = useState(false);
 
+  // Savings cards data from API
+  const [savingsCards, setSavingsCards] = useState([]);
+  const [loadingSavings, setLoadingSavings] = useState(false);
+
+  // “More” menu
   const [moreAnchorEl, setMoreAnchorEl] = useState(null);
-
   const handleMoreOpen = (event) => setMoreAnchorEl(event.currentTarget);
   const handleMoreClose = () => setMoreAnchorEl(null);
 
+  // Chatbot panel
   const [isChatBotOpen, setIsChatBotOpen] = useState(false);
-
-  const [highlightTrigger, setHighlightTrigger] = useState(0);
-
-  const [compareLoading, setCompareLoading] = useState(false);
-  const [analyticsLoading, setAnalyticsLoading] = useState(false);
-  const [chartLoading, setChartLoading] = useState(false);
-  const [scenariosLoading, setScenariosLoading] = useState(false);
-
-  const handleEnableEditConsensus = () => {
-    setCanEditConsensus(true);
-    setHighlightTrigger(Date.now()); 
-  };
-
-  const handleOpenChatBot = () => {
-    setIsChatBotOpen(true);
-  };
-
-  const handleCloseChatBot = () => {
-    setIsChatBotOpen(false);
-  };
-
-  const handleClearFilters = () => {
-    setDateRange({
-      startDate: format(subMonths(new Date("2024-12-01"), 6), "yyyy-MM-dd"),
-      endDate: format(addMonths(new Date("2025-12-31"), 6), "yyyy-MM-dd"),
-    });
-    setSelectedCountry([]);
-    setSelectedState([]);
-    setSelectedCities([]);
-    setSelectedPlants([]);
-    setSelectedCategories([]);
-    setSelectedSKUs([]);
-    setSelectedChannels([]);
-
-    setFiltersData({
-      countries: [],
-      states: [],
-      cities: [],
-      plants: [],
-      categories: [],
-      skus: [],
-      channels: [],
-    });
-    setDateFilterKey((k) => k + 1);
-  };
-
-  useEffect(() => {
-    const fetchModels = async () => {
-      setLoadingModels(true);
-      try {
-        const response = await fetch(`${API_BASE_URL}/models`);
-        if (response.ok) {
-          const modelsData = await response.json();
-          setModels(modelsData);
-          if (modelsData.length > 0) {
-            const defaultModel =
-              modelsData.find((m) => m.model_name === "XGBoost") ||
-              modelsData[0];
-            setModelName(defaultModel.model_name);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching models:", error);
-      } finally {
-        setLoadingModels(false);
-      }
-    };
-
-    fetchModels();
-  }, []);
+  const handleOpenChatBot = () => setIsChatBotOpen(true);
+  const handleCloseChatBot = () => setIsChatBotOpen(false);
 
   const fetchCountries = () => {
     setLoadingCountries(true);
@@ -525,21 +1477,22 @@ export const DemandProjectMonth = () => {
       .finally(() => setLoadingCountries(false));
   };
 
+  // COUNTRY -> STATES
   useEffect(() => {
     if (!selectedCountry.length) {
       setFiltersData((prev) => ({
         ...prev,
         states: [],
-        cities: [],
         plants: [],
-        categories: [],
         skus: [],
+        suppliers: [],
+        supplierLocations: [],
       }));
       setSelectedState([]);
-      setSelectedCities([]);
       setSelectedPlants([]);
-      setSelectedCategories([]);
       setSelectedSKUs([]);
+      setSelectedSuppliers([]);
+      setSelectedSupplierLocations([]);
       return;
     }
     setLoadingStates(true);
@@ -551,229 +1504,247 @@ export const DemandProjectMonth = () => {
         setFiltersData((prev) => ({
           ...prev,
           states: Array.isArray(res.data) ? res.data : [],
-          cities: [],
           plants: [],
-          categories: [],
           skus: [],
+          suppliers: [],
+          supplierLocations: [],
         }));
         setSelectedState([]);
-        setSelectedCities([]);
         setSelectedPlants([]);
-        setSelectedCategories([]);
         setSelectedSKUs([]);
+        setSelectedSuppliers([]);
+        setSelectedSupplierLocations([]);
       })
       .catch(() => {
         setFiltersData((prev) => ({
           ...prev,
           states: [],
-          cities: [],
           plants: [],
-          categories: [],
           skus: [],
+          suppliers: [],
+          supplierLocations: [],
         }));
         setSelectedState([]);
-        setSelectedCities([]);
         setSelectedPlants([]);
-        setSelectedCategories([]);
         setSelectedSKUs([]);
+        setSelectedSuppliers([]);
+        setSelectedSupplierLocations([]);
       })
       .finally(() => setLoadingStates(false));
   }, [selectedCountry]);
 
+  // STATE -> PLANTS
   useEffect(() => {
     if (!selectedState.length) {
       setFiltersData((prev) => ({
         ...prev,
-        cities: [],
         plants: [],
-        categories: [],
         skus: [],
-      }));
-      setSelectedCities([]);
-      setSelectedPlants([]);
-      setSelectedCategories([]);
-      setSelectedSKUs([]);
-      return;
-    }
-    setLoadingCities(true);
-    axios
-      .post(`${API_BASE_URL}/cities-by-states`, {
-        stateIds: selectedState,
-      })
-      .then((res) => {
-        setFiltersData((prev) => ({
-          ...prev,
-          cities: Array.isArray(res.data) ? res.data : [],
-          plants: [],
-          categories: [],
-          skus: [],
-        }));
-        setSelectedCities([]);
-        setSelectedPlants([]);
-        setSelectedCategories([]);
-        setSelectedSKUs([]);
-      })
-      .catch(() => {
-        setFiltersData((prev) => ({
-          ...prev,
-          cities: [],
-          plants: [],
-          categories: [],
-          skus: [],
-        }));
-        setSelectedCities([]);
-        setSelectedPlants([]);
-        setSelectedCategories([]);
-        setSelectedSKUs([]);
-      })
-      .finally(() => setLoadingCities(false));
-  }, [selectedState]);
-
-  useEffect(() => {
-    if (!selectedCities.length) {
-      setFiltersData((prev) => ({
-        ...prev,
-        plants: [],
-        categories: [],
-        skus: [],
+        suppliers: [],
+        supplierLocations: [],
       }));
       setSelectedPlants([]);
-      setSelectedCategories([]);
       setSelectedSKUs([]);
+      setSelectedSuppliers([]);
+      setSelectedSupplierLocations([]);
       return;
     }
     setLoadingPlants(true);
     axios
-      .post(`${API_BASE_URL}/plants-by-cities`, {
-        cityIds: selectedCities,
-      })
+      .post(`${API_BASE_URL}/plants-by-states`, { stateIds: selectedState })
       .then((res) => {
         setFiltersData((prev) => ({
           ...prev,
           plants: Array.isArray(res.data) ? res.data : [],
-          categories: [],
           skus: [],
+          suppliers: [],
+          supplierLocations: [],
         }));
         setSelectedPlants([]);
-        setSelectedCategories([]);
         setSelectedSKUs([]);
+        setSelectedSuppliers([]);
+        setSelectedSupplierLocations([]);
       })
       .catch(() => {
         setFiltersData((prev) => ({
           ...prev,
           plants: [],
-          categories: [],
           skus: [],
+          suppliers: [],
+          supplierLocations: [],
         }));
         setSelectedPlants([]);
-        setSelectedCategories([]);
         setSelectedSKUs([]);
+        setSelectedSuppliers([]);
+        setSelectedSupplierLocations([]);
       })
       .finally(() => setLoadingPlants(false));
-  }, [selectedCities]);
+  }, [selectedState]);
 
-  useEffect(() => {
-    if (!selectedPlants.length) {
-      setFiltersData((prev) => ({
-        ...prev,
-        categories: [],
-        skus: [],
-      }));
-      setSelectedCategories([]);
-      setSelectedSKUs([]);
-      return;
-    }
-    setLoadingCategories(true);
-
-    axios
-      .post(`${API_BASE_URL}/categories-by-plants`, {
-        plantIds: selectedPlants,
-      })
-      .then((res) => {
-        setFiltersData((prev) => ({
-          ...prev,
-          categories: Array.isArray(res.data) ? res.data : [],
-          skus: [],
-        }));
-        setSelectedCategories([]);
-        setSelectedSKUs([]);
-      })
-      .catch(() => {
-        setFiltersData((prev) => ({
-          ...prev,
-          categories: [],
-          skus: [],
-        }));
-        setSelectedCategories([]);
-        setSelectedSKUs([]);
-      })
-      .finally(() => setLoadingCategories(false));
-  }, [selectedPlants]);
-
-  useEffect(() => {
-    if (!selectedCategories.length) {
-      setFiltersData((prev) => ({
-        ...prev,
-        skus: [],
-      }));
-      setSelectedSKUs([]);
-      return;
-    }
+  /* --------- PLANTS -> SKU --------- */
+  const fetchSkus = () => {
+    if (!selectedPlants.length) return;
     setLoadingSkus(true);
     axios
-      .post(`${API_BASE_URL}/skus-by-categories`, {
-        categoryIds: selectedCategories,
-      })
+      .get(`${API_BASE_URL}/getAllSkus`)
       .then((res) => {
         setFiltersData((prev) => ({
           ...prev,
           skus: Array.isArray(res.data) ? res.data : [],
         }));
-        setSelectedSKUs([]);
       })
-      .catch(() => {
+      .catch(() =>
         setFiltersData((prev) => ({
           ...prev,
           skus: [],
-        }));
-        setSelectedSKUs([]);
-      })
+        }))
+      )
       .finally(() => setLoadingSkus(false));
-  }, [selectedCategories]);
+  };
 
   useEffect(() => {
-    setSelectedChannels([]);
-  }, [selectedSKUs]);
+    setSelectedSKUs([]);
+    setSelectedSuppliers([]);
+    setSelectedSupplierLocations([]);
+    setFiltersData((prev) => ({
+      ...prev,
+      suppliers: [],
+      supplierLocations: [],
+    }));
+  }, [selectedPlants]);
 
-  useEffect(() => {
-    setLoadingChannels(true);
+  /* --------- SKU -> SUPPLIERS --------- */
+  const fetchSuppliers = () => {
+    if (!selectedSKUs.length) return;
+    setLoadingSuppliers(true);
     axios
-      .get(`${API_BASE_URL}/getAllChannels`, {
-        headers: {
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
-          Expires: "0",
-        },
-        params: {
-          _: Date.now(),
-        },
-      })
+      .get(`${API_BASE_URL}/getAllSuppliers`)
       .then((res) => {
         setFiltersData((prev) => ({
           ...prev,
-          channels: Array.isArray(res.data) ? res.data : [],
+          suppliers: Array.isArray(res.data) ? res.data : [],
         }));
       })
-      .catch(() => setFiltersData((prev) => ({ ...prev, channels: [] })))
-      .finally(() => setLoadingChannels(false));
+      .catch(() =>
+        setFiltersData((prev) => ({
+          ...prev,
+          suppliers: [],
+        }))
+      )
+      .finally(() => setLoadingSuppliers(false));
+  };
+
+  useEffect(() => {
+    setSelectedSuppliers([]);
+    setSelectedSupplierLocations([]);
+    setFiltersData((prev) => ({ ...prev, supplierLocations: [] }));
+  }, [selectedSKUs]);
+
+  /* --------- SUPPLIERS -> SUPPLIER LOCATIONS --------- */
+  const fetchSupplierLocations = () => {
+    if (!selectedSuppliers.length) return;
+    setLoadingSupplierLocations(true);
+
+    axios
+      .get(`${API_BASE_URL}/getAllSuppliers`)
+      .then((res) => {
+        const allSuppliers = Array.isArray(res.data) ? res.data : [];
+        const selectedIdSet = new Set(selectedSuppliers.map((id) => Number(id)));
+
+        const matched = allSuppliers.filter((s) =>
+          selectedIdSet.has(Number(s.supplier_id))
+        );
+
+        const countries = Array.from(
+          new Set(
+            matched
+              .map((s) => String(s.supplier_country || "").trim())
+              .filter(Boolean)
+          )
+        );
+
+        const locationOptions = countries.map((c) => ({
+          supplier_location: c,
+        }));
+
+        setFiltersData((prev) => ({
+          ...prev,
+          supplierLocations: locationOptions,
+        }));
+      })
+      .catch(() =>
+        setFiltersData((prev) => ({
+          ...prev,
+          supplierLocations: [],
+        }))
+      )
+      .finally(() => setLoadingSupplierLocations(false));
+  };
+
+  useEffect(() => {
+    setSelectedSupplierLocations([]);
+  }, [selectedSuppliers]);
+
+  /* --------- Savings cards --------- */
+  useEffect(() => {
+    const fmt = (num) =>
+      (num < 0 ? "-$" : "$") +
+      Math.abs(Number(num) || 0).toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+
+    setLoadingSavings(true);
+    axios
+      .get(`${API_BASE_URL}/getSupplierSavings`)
+      .then((res) => {
+        const arr = Array.isArray(res.data) ? res.data : [];
+
+        const cards = arr.map((row) => {
+          const val = parseFloat(row.total_savings_dollars);
+          return {
+            supplier: row.supplier_name || "Supplier",
+            amount: fmt(val),
+            isNegative: val < 0,
+            color: val < 0 ? "#ef4444" : "#16a34a",
+          };
+        });
+
+        setSavingsCards(cards);
+      })
+      .catch(() => setSavingsCards([]))
+      .finally(() => setLoadingSavings(false));
   }, []);
+
+  const handleClearFilters = () => {
+    setDateRange({
+      startDate: format(subMonths(new Date("2024-12-01"), 6), "yyyy-MM-dd"),
+      endDate: format(addMonths(new Date("2025-12-31"), 6), "yyyy-MM-dd"),
+    });
+    setSelectedCountry([]);
+    setSelectedState([]);
+    setSelectedPlants([]);
+    setSelectedSKUs([]);
+    setSelectedSuppliers([]);
+    setSelectedSupplierLocations([]);
+
+    setFiltersData({
+      countries: [],
+      states: [],
+      plants: [],
+      skus: [],
+      suppliers: [],
+      supplierLocations: [],
+    });
+    setDateFilterKey((k) => k + 1);
+  };
 
   return (
     <Box>
       <AppBar
         position="static"
         sx={{
-          bgcolor: "#0288d1",
+          bgcolor: "#075985",
           borderBottom: 1,
           borderColor: "#78909c",
           boxShadow: 0,
@@ -843,6 +1814,7 @@ export const DemandProjectMonth = () => {
         </Toolbar>
       </AppBar>
 
+      {/* ======= Filters Row ======= */}
       <Box
         ref={scrollRef}
         onMouseDown={handleMouseDown}
@@ -853,7 +1825,7 @@ export const DemandProjectMonth = () => {
           display: "flex",
           alignItems: "center",
           justifyContent: "start",
-          bgcolor: "#64748B",
+          bgcolor: "#0891B2",
           p: 1.25,
           gap: 2,
           overflowX: "auto",
@@ -861,12 +1833,8 @@ export const DemandProjectMonth = () => {
           cursor: "grab",
           userSelect: "none",
           WebkitOverflowScrolling: "touch",
-          "&.dragging": {
-            cursor: "grabbing",
-          },
-          "&::-webkit-scrollbar": {
-            display: "none",
-          },
+          "&.dragging": { cursor: "grabbing" },
+          "&::-webkit-scrollbar": { display: "none" },
           scrollbarWidth: "none",
           msOverflowStyle: "none",
         }}
@@ -889,7 +1857,6 @@ export const DemandProjectMonth = () => {
             position="relative"
             width={24}
             height={20}
-            onClick={handleOpenActivities}
             sx={{ cursor: "pointer" }}
           >
             <ChatBubbleOutline sx={{ width: 20, height: 20, color: "white" }} />
@@ -936,12 +1903,6 @@ export const DemandProjectMonth = () => {
           <DateFilter
             key={dateFilterKey}
             onDateChange={(range) => setDateRange(range)}
-            disabled={
-              activeTab === 1 ||
-              activeTab === 2 ||
-              activeTab === 3 ||
-              activeTab === 4
-            }
           />
 
           <MultiSelectWithCheckboxes
@@ -955,13 +1916,7 @@ export const DemandProjectMonth = () => {
             loading={loadingCountries}
             onOpen={fetchCountries}
             width={110}
-            single 
-            disabled={
-              activeTab === 1 ||
-              activeTab === 2 ||
-              activeTab === 3 ||
-              activeTab === 4
-            }
+            single
           />
 
           <MultiSelectWithCheckboxes
@@ -973,32 +1928,7 @@ export const DemandProjectMonth = () => {
             setSelected={setSelectedState}
             searchPlaceholder="Search state"
             loading={loadingStates}
-            disabled={
-              selectedCountry.length === 0 || 
-              activeTab === 1 ||
-              activeTab === 2 ||
-              activeTab === 3 ||
-              activeTab === 4
-            }
-            width={110}
-          />
-
-          <MultiSelectWithCheckboxes
-            label="City"
-            options={filtersData.cities}
-            optionKey="city_id"
-            displayKey="city_name"
-            selected={selectedCities}
-            setSelected={setSelectedCities}
-            searchPlaceholder="Search city"
-            loading={loadingCities}
-            disabled={
-              selectedState.length === 0 || 
-              activeTab === 1 ||
-              activeTab === 2 ||
-              activeTab === 3 ||
-              activeTab === 4
-            }
+            disabled={selectedCountry.length === 0}
             width={110}
           />
 
@@ -1011,35 +1941,11 @@ export const DemandProjectMonth = () => {
             setSelected={setSelectedPlants}
             searchPlaceholder="Search plant"
             loading={loadingPlants}
-            disabled={
-              selectedCities.length === 0 ||
-              activeTab === 1 ||
-              activeTab === 2 ||
-              activeTab === 3 ||
-              activeTab === 4
-            }
+            disabled={selectedState.length === 0}
             width={110}
           />
 
-          <MultiSelectWithCheckboxes
-            label="Category"
-            options={filtersData.categories}
-            optionKey="category_id"
-            displayKey="category_name"
-            selected={selectedCategories}
-            setSelected={setSelectedCategories}
-            searchPlaceholder="Search category"
-            loading={loadingCategories}
-            disabled={
-              selectedPlants.length === 0 || 
-              activeTab === 1 ||
-              activeTab === 2 ||
-              activeTab === 3 ||
-              activeTab === 4
-            }
-            width={110}
-          />
-
+          {/* SKU (after Plant) */}
           <MultiSelectWithCheckboxes
             label="SKU"
             options={filtersData.skus}
@@ -1049,33 +1955,39 @@ export const DemandProjectMonth = () => {
             setSelected={setSelectedSKUs}
             searchPlaceholder="Search SKU"
             loading={loadingSkus}
-            disabled={
-              selectedCategories.length === 0 || 
-              activeTab === 1 ||
-              activeTab === 2 ||
-              activeTab === 3 ||
-              activeTab === 4
-            }
-            width={110}
+            disabled={selectedPlants.length === 0}
+            onOpen={fetchSkus}
+            width={130}
           />
 
+          {/* Suppliers (after SKU) */}
           <MultiSelectWithCheckboxes
-            label="Channel"
-            options={filtersData.channels}
-            optionKey="channel_id"
-            displayKey="channel_name"
-            selected={selectedChannels}
-            setSelected={setSelectedChannels}
-            searchPlaceholder="Search channel"
-            loading={loadingChannels}
-            width={110}
-            disabled={
-              selectedSKUs.length === 0 || 
-              activeTab === 1 ||
-              activeTab === 2 ||
-              activeTab === 3 ||
-              activeTab === 4
-            }
+            label="Suppliers"
+            options={filtersData.suppliers}
+            optionKey="supplier_id"
+            displayKey="supplier_name"
+            selected={selectedSuppliers}
+            setSelected={setSelectedSuppliers}
+            searchPlaceholder="Search supplier"
+            loading={loadingSuppliers}
+            disabled={selectedSKUs.length === 0}
+            onOpen={fetchSuppliers}
+            width={150}
+          />
+
+          {/* Supplier Location (after Suppliers) */}
+          <MultiSelectWithCheckboxes
+            label="Supplier Location"
+            options={filtersData.supplierLocations} // [{ supplier_location: 'USA' }]
+            optionKey="supplier_location"
+            displayKey="supplier_location"
+            selected={selectedSupplierLocations} // ['USA', 'India']
+            setSelected={setSelectedSupplierLocations}
+            searchPlaceholder="Search location"
+            loading={loadingSupplierLocations}
+            disabled={selectedSuppliers.length === 0}
+            onOpen={fetchSupplierLocations}
+            width={170}
           />
 
           <Button
@@ -1096,22 +2008,13 @@ export const DemandProjectMonth = () => {
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
-              "&:hover": {
-                borderColor: "#1976d2",
-                bgcolor: "common.white",
-              },
+              "&:hover": { borderColor: "#1976d2", bgcolor: "common.white" },
               "&:disabled": {
                 bgcolor: "#f5f5f5",
                 borderColor: "#e0e0e0",
                 color: "#9e9e9e",
               },
             }}
-            disabled={
-              activeTab === 1 ||
-              activeTab === 2 ||
-              activeTab === 3 ||
-              activeTab === 4
-            }
           >
             Clear Filters
           </Button>
@@ -1119,6 +2022,7 @@ export const DemandProjectMonth = () => {
           <IconButton size="small" onClick={handleMoreOpen}>
             <MoreVert sx={{ width: 20, height: 20 }} />
           </IconButton>
+
           <Menu
             anchorEl={moreAnchorEl}
             open={Boolean(moreAnchorEl)}
@@ -1132,325 +2036,63 @@ export const DemandProjectMonth = () => {
                 padding: 0,
               },
             }}
-            MenuListProps={{
-              sx: { p: 0 },
-            }}
+            MenuListProps={{ sx: { p: 0 } }}
           >
             <Listbox />
           </Menu>
         </Stack>
       </Box>
 
-      <Tabs
-        value={activeTab}
-        onChange={(e, newValue) => {
-          setActiveTab(newValue);
+      {/* ======= NEW CONTENT: Chart + Table ======= */}
+      <Box sx={{ bgcolor: "#EFF6FF", minHeight: "calc(100vh - 56px)", p: 1.25 }}>
+        <DataVisualizationSection
+          startDate={dateRange.startDate}
+          endDate={dateRange.endDate}
+          countryIds={selectedCountry}
+          stateIds={selectedState}
+          plantIds={selectedPlants}
+          skuIds={selectedSKUs}
+          supplierIds={selectedSuppliers}
+          supplierLocations={selectedSupplierLocations}
+          savingsCards={loadingSavings ? [] : savingsCards}
+        />
 
-          setDateRange({
-            startDate: format(
-              subMonths(new Date("2024-12-01"), 6),
-              "yyyy-MM-dd"
-            ),
-            endDate: format(addMonths(new Date("2025-12-31"), 6), "yyyy-MM-dd"),
-          });
-
-          if (
-            newValue === 1 ||
-            newValue === 2 ||
-            newValue === 3 ||
-            newValue === 4
-          ) {
-            setSelectedCountry([]);
-            setSelectedState([]);
-            setSelectedCities([]);
-            setSelectedPlants([]);
-            setSelectedCategories([]);
-            setSelectedSKUs([]);
-            setSelectedChannels([]);
-
-            setFiltersData({
-              countries: [],
-              states: [],
-              cities: [],
-              plants: [],
-              categories: [],
-              skus: [],
-              channels: [],
-            });
-          }
-
-          if (newValue === 2) {
-            setCompareLoading(true);
-            setTimeout(() => setCompareLoading(false), 300);
-          } else if (newValue === 3) {
-            setAnalyticsLoading(true);
-            setTimeout(() => setAnalyticsLoading(false), 300);
-          } else if (newValue === 4) {
-            setScenariosLoading(true);
-            setTimeout(() => setScenariosLoading(false), 300);
-          }
-        }}
-        sx={{
-          borderBottom: 1,
-          borderColor: "grey.200",
-          bgcolor: "common.white",
-          minHeight: 30,
-        }}
-      >
-        {tabs.map((tab, index) => (
-          <Tab
-            key={index}
-            label={
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                <Typography variant="body2" sx={{ color: "#545454" }}>
-                  {tab.label}
-                </Typography>
-                {tab.count && (
-                  <Chip label={tab.count} size="small" color="error" />
-                )}
-              </Box>
-            }
-            sx={{ minHeight: 30, px: 2.5, textTransform: "none" }}
-          />
-        ))}
-      </Tabs>
-
-      {activeTab < 2 && (
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            px: 2.5,
-            py: 0,
-            bgcolor: "common.white",
-            borderBottom: 1,
-            borderColor: "grey.200",
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}></Box>
-        </Box>
-      )}
-
-      <Box sx={{ bgcolor: "#EFF6FF", minHeight: "100vh", py: 0 }}>
-        <Box sx={{ flexGrow: 1, overflow: "auto" }}>
-          {activeTab === 1 ? (
-            chartLoading ? (
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  minHeight: "400px",
-                }}
-              >
-                <CircularProgress />
-              </Box>
-            ) : (
-              <Box
-                sx={{
-                  width: "100%",
-                  bgcolor: "#f6faff",
-                  p: 0,
-                  m: 0,
-                  lineHeight: 1,
-                  minHeight: "auto",
-                }}
-              >
-                <AlertProvider>
-                  <div style={{ margin: 0, padding: 0 }}>
-                    <ChartSection />
-                  </div>
-                </AlertProvider>
-              </Box>
-            )
-          ) : activeTab === 2 ? (
-            compareLoading ? (
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  minHeight: "400px",
-                }}
-              >
-                <CircularProgress />
-              </Box>
-            ) : (
-              <Box
-                sx={{
-                  width: "100%",
-                  minHeight: 0,
-                  bgcolor: "#e9f0f7",
-                  p: 0,
-                  m: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                }}
-              >
-                <ModelComparisonSection />
-              </Box>
-            )
-          ) : activeTab === 3 ? (
-            analyticsLoading ? (
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  minHeight: "400px",
-                }}
-              >
-                <CircularProgress />
-              </Box>
-            ) : (
-              <Box
-                sx={{
-                  width: "100%",
-                  minHeight: 0,
-                  bgcolor: "#e9f0f7",
-                  p: 0,
-                  m: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                }}
-              >
-                <AnalyticsFrameSection />
-              </Box>
-            )
-          ) : activeTab === 4 ? ( 
-            scenariosLoading ? (
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  minHeight: 400,
-                }}
-              >
-                <CircularProgress />
-              </Box>
-            ) : (
-              <Box sx={{ width: "100%", bgcolor: "#f6faff", p: 0, m: 0 }}>
-                <ScenarioSection /> 
-              </Box>
-            )
-          ) : (
-            <>
-              <ForecastTable
-                startDate={dateRange.startDate}
-                endDate={dateRange.endDate}
-                modelName={modelName}
-                setModelName={setModelName}
-                models={models}
-                loadingModels={loadingModels}
-                selectedCountry={getSelectedNames(
-                  selectedCountry,
-                  filtersData.countries,
-                  "country_id",
-                  "country_name"
-                )}
-                selectedState={getSelectedNames(
-                  selectedState,
-                  filtersData.states,
-                  "state_id",
-                  "state_name"
-                )}
-                selectedCities={getSelectedNames(
-                  selectedCities,
-                  filtersData.cities,
-                  "city_id",
-                  "city_name"
-                )}
-                selectedPlants={getSelectedNames(
-                  selectedPlants,
-                  filtersData.plants,
-                  "plant_id",
-                  "plant_name"
-                )}
-                selectedCategories={getSelectedNames(
-                  selectedCategories,
-                  filtersData.categories,
-                  "category_id",
-                  "category_name"
-                )}
-                selectedSKUs={getSelectedNames(
-                  selectedSKUs,
-                  filtersData.skus,
-                  "sku_id",
-                  "sku_code"
-                )}
-                selectedChannels={getSelectedNames(
-                  selectedChannels,
-                  filtersData.channels,
-                  "channel_id",
-                  "channel_name"
-                )}
-                canEditConsensus={canEditConsensus}
-                setCanEditConsensus={setCanEditConsensus}
-                highlightTrigger={highlightTrigger}
-              />
-            </>
-          )}
-        </Box>
-
-        {showActivities && (
-          <Box
-            sx={{
-              position: "fixed",
-              top: 0,
-              right: 0,
-              height: "100vh",
-              width: 700,
-              zIndex: 1400,
-              bgcolor: "rgba(0,0,0,0.18)",
-              display: "flex",
-              alignItems: "flex-start",
-              justifyContent: "flex-end",
-            }}
-            onClick={handleCloseActivities}
-          >
-            <Box
-              sx={{
-                height: "100vh",
-                boxShadow: 6,
-                bgcolor: "grey.400",
-                position: "relative",
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Chart onClose={handleCloseActivities} />
-            </Box>
-          </Box>
-        )}
-
-        <Dialog
-          open={isChatBotOpen}
-          onClose={handleCloseChatBot}
-          TransitionComponent={SlideTransition}
-          maxWidth={false}
-          PaperProps={{
-            sx: {
-              margin: 0,
-              maxWidth: "none",
-              maxHeight: "none",
-              borderRadius: "10px",
-              overflow: "hidden",
-              position: "fixed",
-              right: 0,
-              top: 0,
-              height: "100vh",
-            },
-          }}
-          sx={{
-            "& .MuiDialog-container": {
-              justifyContent: "flex-end",
-            },
-          }}
-        >
-          <ChatBot onClose={handleCloseChatBot} />
-        </Dialog>
+        <Divider sx={{ my: 1.25 }} />
+        <SupplierDataTableSection
+          startDate={dateRange.startDate}
+          endDate={dateRange.endDate}
+          countryIds={selectedCountry}
+          stateIds={selectedState}
+          plantIds={selectedPlants}
+          skuIds={selectedSKUs}
+          supplierIds={selectedSuppliers}
+          supplierLocations={selectedSupplierLocations}
+        />
       </Box>
+
+      {/* Chatbot Dialog */}
+      <Dialog
+        open={isChatBotOpen}
+        onClose={handleCloseChatBot}
+        TransitionComponent={SlideTransition}
+        maxWidth={false}
+        PaperProps={{
+          sx: {
+            margin: 0,
+            maxWidth: "none",
+            maxHeight: "none",
+            borderRadius: "10px",
+            overflow: "hidden",
+            position: "fixed",
+            right: 0,
+            top: 0,
+            height: "100vh",
+          },
+        }}
+        sx={{ "& .MuiDialog-container": { justifyContent: "flex-end" } }}
+      >
+        <ChatBot onClose={handleCloseChatBot} />
+      </Dialog>
     </Box>
   );
 };

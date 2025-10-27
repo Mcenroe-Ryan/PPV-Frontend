@@ -26,6 +26,7 @@ import Layout from "./components/Layout";
 import { ImportProfilesData } from "./ImportProfile";
 import { AddNewProjectSpreadsheet } from "./AddProjectSpreadsheet";
 import PermissionConsentDialog from "./components/SSO";
+import SAQ from "./components/SAQ";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -722,6 +723,7 @@ const AuthPages = () => (
         <Route path="/demand" element={<DemandProjectMonth />} />
         <Route path="/import-load-data" element={<ImportProfilesData />} />
         <Route path="/spreadsheet" element={<AddNewProjectSpreadsheet />} />
+        <Route path="/saq" element ={<SAQ /> } />
       </Routes>
     </Layout>
   </Router>

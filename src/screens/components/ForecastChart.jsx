@@ -50,8 +50,7 @@ import DescriptionOutlined from "@mui/icons-material/DescriptionOutlined";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import StarIcon from "@mui/icons-material/Star";
 
-// const API_BASE_URL = import.meta.env.VITE_API_URL;
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 const getMapeColor = (mapeValue) => {
   const v = Number(mapeValue);
