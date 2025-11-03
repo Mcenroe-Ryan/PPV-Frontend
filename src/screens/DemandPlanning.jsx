@@ -1,5 +1,11 @@
-
-import React, { useState, useEffect, useRef, useMemo, forwardRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  forwardRef,
+  useLayoutEffect,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import {
@@ -36,13 +42,17 @@ import {
   Search as SearchIcon,
 } from "@mui/icons-material";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import CheckBoxIcon from "@mui/icons-material/CheckBox";
+import CheckBoxOutlineBlankIcon from "@mui/icons-material/CheckBoxOutlineBlank";
 import { format, addMonths, subMonths, parse } from "date-fns";
 import DateFilter from "./components/DateFilter";
 import ChatBot from "./components/Chatbox";
+import SAQ from "./components/SAQ";
 
 // Highcharts
 import Highcharts from "highcharts";
 import HighchartsReact from "highcharts-react-official";
+import Scorecard from "./components/Scorecard";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
@@ -111,6 +121,216 @@ const Listbox = () => {
     </Box>
   );
 };
+
+/** ===================== New Savings component ===================== **/
+const SAVINGS_SUPPLIER_DATA = [
+  {
+    country: "India",
+    flagUrl: "https://flagcdn.com/w40/in.png",
+    suppliers: [
+      {
+        id: 1,
+        name: "Bharat Supplier",
+        logoUrl: "https://via.placeholder.com/30",
+        savings: "$1763.99",
+        isPositive: true,
+        isChecked: true,
+      },
+      {
+        id: 2,
+        name: "Apollo Tyres",
+        logoUrl: "https://via.placeholder.com/30",
+        savings: "$1263",
+        isPositive: true,
+        isChecked: false,
+      },
+    ],
+  },
+  {
+    country: "China",
+    flagUrl: "https://flagcdn.com/w40/cn.png",
+    suppliers: [
+      {
+        id: 3,
+        name: "AutoMech Gumby",
+        logoUrl: "https://via.placeholder.com/30",
+        savings: "-$18.46",
+        isPositive: false,
+        isChecked: true,
+      },
+      {
+        id: 4,
+        name: "ShenZhen Nova",
+        logoUrl: "https://via.placeholder.com/30",
+        savings: "-$20.75",
+        isPositive: false,
+        isChecked: false,
+      },
+      {
+        id: 5,
+        name: "Shanghai Xiongda",
+        logoUrl: "https://via.placeholder.com/30",
+        savings: "-$9.02",
+        isPositive: false,
+        isChecked: false,
+      },
+    ],
+  },
+  {
+    country: "USA",
+    flagUrl: "https://flagcdn.com/w40/us.png",
+    suppliers: [
+      {
+        id: 6,
+        name: "Global Parts Inc.",
+        logoUrl: "https://via.placeholder.com/30",
+        savings: "$3216.34",
+        isPositive: true,
+        isChecked: true,
+      },
+    ],
+  },
+];
+
+function SavingsBySupplier() {
+  const [suppliers, setSuppliers] = useState(SAVINGS_SUPPLIER_DATA);
+
+  const handleCheckboxChange = (countryIndex, supplierIndex) => {
+    setSuppliers((prev) => {
+      const next = prev.map((c) => ({
+        ...c,
+        suppliers: c.suppliers.map((s) => ({ ...s })),
+      }));
+      next[countryIndex].suppliers[supplierIndex].isChecked =
+        !next[countryIndex].suppliers[supplierIndex].isChecked;
+      return next;
+    });
+  };
+
+  return (
+    <Box
+      sx={{
+        p: "15px",
+        bgcolor: "background.paper",
+        border: 1,
+        borderColor: "grey.400",
+      }}
+    >
+      <Typography
+        variant="body1"
+        sx={{
+          fontWeight: 500,
+          color: "text.secondary",
+          mb: "15px",
+        }}
+      >
+        Savings by supplier in $
+      </Typography>
+
+      <Stack
+        direction="row"
+        spacing={2.5}
+        divider={<Divider orientation="vertical" flexItem />}
+      >
+        {suppliers.map((countryData, countryIndex) => (
+          <Stack
+            key={countryData.country}
+            spacing="15px"
+            sx={{ minWidth: "286px" }}
+          >
+            <Stack direction="row" spacing={1.25} alignItems="center">
+              <Box
+                component="img"
+                src={countryData.flagUrl}
+                alt={countryData.country}
+                sx={{ width: 24, height: 16, objectFit: "cover" }}
+              />
+              <Typography
+                variant="body1"
+                sx={{
+                  fontWeight: 500,
+                  color: "text.secondary",
+                }}
+              >
+                {countryData.country}
+              </Typography>
+            </Stack>
+
+            <Divider />
+
+            {countryData.suppliers.map((supplier, supplierIndex) => (
+              <Box
+                key={supplier.id}
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  p: "5px",
+                  bgcolor: supplier.isChecked ? "#E0F2FE" : "transparent",
+                  borderRadius: "5px",
+                  border: supplier.isChecked ? 1 : 0,
+                  borderColor: supplier.isChecked ? "#7DD3FC" : "transparent",
+                }}
+              >
+                <Stack direction="row" spacing={1.25} alignItems="center">
+                  <Checkbox
+                    checked={supplier.isChecked}
+                    onChange={() =>
+                      handleCheckboxChange(countryIndex, supplierIndex)
+                    }
+                    icon={<CheckBoxOutlineBlankIcon />}
+                    checkedIcon={<CheckBoxIcon />}
+                    sx={{
+                      p: "5px",
+                      "& .MuiSvgIcon-root": {
+                        fontSize: 16,
+                      },
+                    }}
+                  />
+                  <Avatar
+                    src={supplier.logoUrl}
+                    alt={supplier.name}
+                    sx={{ width: 30, height: 30 }}
+                  />
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontFamily: "Poppins, Helvetica",
+                      fontWeight: 500,
+                      color: "rgba(0, 0, 0, 0.5)",
+                      fontSize: "14px",
+                      lineHeight: "24px",
+                    }}
+                  >
+                    {supplier.name}
+                  </Typography>
+                </Stack>
+
+                <Typography
+                  variant="body1"
+                  sx={{
+                    fontFamily: "Poppins, Helvetica",
+                    fontWeight: 500,
+                    color: supplier.isPositive ? "#16A34A" : "#EF4444",
+                    fontSize: "16px",
+                    lineHeight: "22px",
+                  }}
+                >
+                  {supplier.savings}
+                </Typography>
+              </Box>
+            ))}
+          </Stack>
+        ))}
+      </Stack>
+    </Box>
+  );
+}
+/** =================== /New Savings component =================== **/
+
+const SlideTransition = forwardRef(function Transition(props, ref) {
+  return <Slide direction="left" ref={ref} {...props} />;
+});
 
 function MultiSelectWithCheckboxes({
   label,
@@ -297,12 +517,8 @@ function MultiSelectWithCheckboxes({
   );
 }
 
-const SlideTransition = forwardRef(function Transition(props, ref) {
-  return <Slide direction="left" ref={ref} {...props} />;
-});
-
 const DataVisualizationSection = ({
-  savingsCards,
+  savingsCards, // kept for compatibility, not used now
   startDate,
   endDate,
   countryIds = [],
@@ -312,8 +528,6 @@ const DataVisualizationSection = ({
   supplierIds = [],
   supplierLocations = [],
 }) => {
-  const navigate = useNavigate();
-
   const [selectedTab, setSelectedTab] = useState(0);
   const [selectedPeriod, setSelectedPeriod] = useState("M");
 
@@ -333,12 +547,14 @@ const DataVisualizationSection = ({
 
   // Global Events overlay (vertical bars)
   const [globalRaw, setGlobalRaw] = useState([]);
-  const [xPlotBands, setXPlotBands] = useState([]); // bars on xAxis
-  const [eventsByX, setEventsByX] = useState({}); 
+  const [xPlotBands, setXPlotBands] = useState([]);
+  const [eventsByX, setEventsByX] = useState({});
+
+  // chart ref for reflow
+  const chartRef = useRef(null);
 
   /* Helpers */
   const firstOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
-  const monthKey = (d) => format(d, "yyyy-MM");
   const buildMonthlyRange = (start, end) => {
     const out = [];
     const d = new Date(start.getFullYear(), start.getMonth(), 1);
@@ -358,16 +574,28 @@ const DataVisualizationSection = ({
     const fetchChart = async () => {
       setChartLoading(true);
       try {
+        // const payload = {
+        //   startDate,
+        //   endDate,
+        //   countryIds,
+        //   stateIds,
+        //   plantIds,
+        //   skuIds,
+        //   supplierIds,
+        //   supplierLocations,
+        //   includeForecast: true,
+        // };
         const payload = {
           startDate,
           endDate,
+          skuId: Array.isArray(skuIds) ? skuIds[0] ?? null : skuIds,
+          // keep other filters if you still use them:
           countryIds,
           stateIds,
           plantIds,
-          skuIds,
           supplierIds,
           supplierLocations,
-          includeForecast: true, 
+          includeForecast: true,
         };
 
         const { data } = await axios.post(
@@ -378,21 +606,21 @@ const DataVisualizationSection = ({
 
         const rows = Array.isArray(data) ? data : [];
 
-        // Build X from the selected date range (guarantees months like 2026-04 show)
         const from = firstOfMonth(new Date(startDate));
         const to = firstOfMonth(new Date(endDate));
         const months = buildMonthlyRange(from, to);
         const categories = months.map((d) => format(d, "MMM yyyy"));
         setLineCategories(categories);
 
-        // Build per-supplier series (actual vs forecast)
         const bySupplier = new Map();
 
         for (const r of rows) {
           const supplier = r.supplier_name || "Supplier";
           const m = firstOfMonth(new Date(r.forecast_month));
           const idx = months.findIndex(
-            (d) => d.getFullYear() === m.getFullYear() && d.getMonth() === m.getMonth()
+            (d) =>
+              d.getFullYear() === m.getFullYear() &&
+              d.getMonth() === m.getMonth()
           );
           if (idx === -1) continue;
 
@@ -407,11 +635,11 @@ const DataVisualizationSection = ({
           }
           const bucket = bySupplier.get(supplier);
 
-          if (type === "forecast") bucket.forecast[idx] = isFinite(value) ? value : null;
+          if (type === "forecast")
+            bucket.forecast[idx] = isFinite(value) ? value : null;
           else bucket.actual[idx] = isFinite(value) ? value : null;
         }
 
-        // Ensure forecast starts AFTER last actual month (visually split)
         const colorBy = {
           "Global Parts Inc.": "#22c55e",
           "AutoMech Gumby": "#60a5fa",
@@ -421,7 +649,6 @@ const DataVisualizationSection = ({
 
         const seriesOut = [];
         for (const [name, { actual, forecast }] of bySupplier.entries()) {
-          // Find last index with an actual value
           let lastActualIdx = -1;
           for (let i = actual.length - 1; i >= 0; i--) {
             if (typeof actual[i] === "number") {
@@ -430,12 +657,10 @@ const DataVisualizationSection = ({
             }
           }
 
-          // Null-out any forecast points up to and including last actual month
           const forecastTrimmed = forecast.map((v, i) =>
             i <= lastActualIdx ? null : v
           );
 
-          // Actual series (solid)
           seriesOut.push({
             name,
             type: "line",
@@ -447,14 +672,16 @@ const DataVisualizationSection = ({
             zIndex: 2,
           });
 
-          // Forecast series (dotted), only if toggle is on and any values exist
-          if (showForecast && forecastTrimmed.some((v) => typeof v === "number")) {
+          if (
+            showForecast &&
+            forecastTrimmed.some((v) => typeof v === "number")
+          ) {
             seriesOut.push({
               name: `${name} (Forecast)`,
               type: "line",
               data: forecastTrimmed,
               color: colorBy[name],
-              dashStyle: "ShortDash", 
+              dashStyle: "ShortDash",
               marker: { enabled: true, radius: 3 },
               lineWidth: 2,
               tooltip: { valueSuffix: "%" },
@@ -475,7 +702,6 @@ const DataVisualizationSection = ({
 
     fetchChart();
     return () => controller.abort();
-    // re-run when filters/dates/toggle changes
   }, [
     startDate,
     endDate,
@@ -519,7 +745,6 @@ const DataVisualizationSection = ({
       }
     };
 
-    // Map base supplier series by normalized name (without " (Forecast)")
     const seriesBySupplier = new Map(
       lineSeries
         .filter((s) => s.type === "line")
@@ -536,7 +761,14 @@ const DataVisualizationSection = ({
       const supplierSeries = seriesBySupplier.get(a.supplier_name);
       if (!supplierSeries) continue;
 
-      const yVal = supplierSeries.data?.[xIndex];
+      // Try actual; if null and forecast exists + showForecast, use forecast
+      let yVal = supplierSeries.data?.[xIndex];
+      if ((yVal == null || Number.isNaN(yVal)) && showForecast) {
+        const forecastSeries = lineSeries.find(
+          (s) => s.type === "line" && s.name === `${a.supplier_name} (Forecast)`
+        );
+        if (forecastSeries) yVal = forecastSeries.data?.[xIndex];
+      }
       if (yVal == null || Number.isNaN(yVal)) continue;
 
       points.push({
@@ -575,7 +807,7 @@ const DataVisualizationSection = ({
           ]
         : []
     );
-  }, [showAlerts, alertsRaw, lineCategories, lineSeries]);
+  }, [showAlerts, alertsRaw, lineCategories, lineSeries, showForecast]);
 
   const combinedSeries = useMemo(
     () => (showAlerts ? [...lineSeries, ...alertSeries] : lineSeries),
@@ -629,7 +861,7 @@ const DataVisualizationSection = ({
       const xIdx = lineCategories.indexOf(cat);
       if (xIdx === -1) return;
 
-      const width = 0.32; // narrow bar
+      const width = 0.32;
       bands.push({
         id: `ge-${idx}-${xIdx}`,
         from: xIdx - width / 2,
@@ -654,204 +886,249 @@ const DataVisualizationSection = ({
     }
   };
 
-  /* --------- Highcharts options (dynamic Y-range) --------- */
-const options = useMemo(() => {
-  // Collect all numeric y values (exclude scatter)
-  const allY = [];
-  combinedSeries.forEach((s) => {
-    if (s.type === "line") {
-      (s.data || []).forEach((v) => {
-        if (typeof v === "number" && isFinite(v)) allY.push(v);
-      });
+  /** --------- Dynamic bounds & height helpers (AUTO SCALE) --------- **/
+  const computeYBounds = (seriesArr) => {
+    const ys = [];
+    for (const s of seriesArr || []) {
+      if (s?.type !== "line" && s?.type !== "scatter") continue;
+      const data = s.data || [];
+      for (const v of data) {
+        const y =
+          typeof v === "number" ? v : v && typeof v.y === "number" ? v.y : null;
+        if (Number.isFinite(y)) ys.push(y);
+      }
     }
-  });
-  const yMin = allY.length ? Math.min(...allY) : -15;
-  const yMax = allY.length ? Math.max(...allY) : 15;
-  const pad = Math.max(2, (yMax - yMin) * 0.1);
-  const softMin = Math.min(yMin - pad, -15);
-  const softMax = Math.max(yMax + pad, 15);
+    if (!ys.length) return { min: -15, max: 15, span: 30 };
 
-  return {
-    chart: {
-      height: 440,
-      spacing: [10, 16, 16, 16],
-      backgroundColor: "transparent",
-    },
-    title: { text: null },
-    credits: { enabled: false },
-    exporting: { enabled: false },
-    xAxis: {
-      categories: lineCategories,
-      tickmarkPlacement: "on",
-      lineColor: "rgba(0,0,0,0.15)",
-      tickColor: "rgba(0,0,0,0.2)",
-      gridLineWidth: 1,
-      gridLineColor: "rgba(0,0,0,0.08)",
-      labels: { 
-        style: { 
-          color: "rgba(0,0,0,0.65)",
-          fontSize: "11px",
-          fontWeight: "500"
-        } 
+    let min = Math.min(...ys);
+    let max = Math.max(...ys);
+
+    if (min === max) {
+      const bump = Math.max(1, Math.abs(min) * 0.2);
+      min -= bump;
+      max += bump;
+    } else {
+      const pad = (max - min) * 0.1; // 10% padding
+      min -= pad;
+      max += pad;
+    }
+
+    const span = Math.abs(max - min);
+    const stepBase =
+      span <= 2 ? 0.5 : span <= 5 ? 1 : span <= 20 ? 2 : span <= 50 ? 5 : 10;
+    const roundDown = (v) => Math.floor(v / stepBase) * stepBase;
+    const roundUp = (v) => Math.ceil(v / stepBase) * stepBase;
+
+    min = roundDown(min);
+    max = roundUp(max);
+
+    // Keep a clear zero line zone if we cross around 0
+    if (max > -0.1 && min < 0.1) {
+      const halo = Math.max(5, stepBase * 3);
+      min = Math.min(min, -halo);
+      max = Math.max(max, halo);
+    }
+    return { min, max, span: max - min };
+  };
+
+  const computeChartHeight = (seriesArr) => {
+    const baseNames = new Set(
+      (seriesArr || [])
+        .filter((s) => s.type === "line" && !s.name.endsWith(" (Forecast)"))
+        .map((s) => s.name)
+    );
+    const baseCount = Math.max(1, baseNames.size);
+    const { span } = computeYBounds(seriesArr);
+
+    const base = 360;
+    const perSeries = 28; // pixels per series beyond 2
+    const spanFactor = Math.min(1.6, Math.max(0, span / 20)) * 80; // ~0..128 px
+    const height = base + Math.max(0, baseCount - 2) * perSeries + spanFactor;
+
+    return Math.max(320, Math.min(760, Math.round(height)));
+  };
+
+  /* --------- Highcharts options (dynamic Y-range + height) --------- */
+  const options = useMemo(() => {
+    const { min, max, span } = computeYBounds(combinedSeries);
+    const dynamicHeight = computeChartHeight(combinedSeries);
+
+    const tickAmount = span <= 8 ? 5 : span <= 20 ? 7 : span <= 40 ? 9 : 11;
+
+    return {
+      chart: {
+        height: dynamicHeight,
+        spacing: [10, 16, 16, 16],
+        backgroundColor: "transparent",
       },
-      plotBands: showGlobal ? xPlotBands : [],
-    },
-    yAxis: {
       title: { text: null },
-      min: softMin,
-      max: softMax,
-      gridLineColor: "rgba(0,0,0,0.1)",
-      gridLineWidth: 1,
-      labels: {
-        formatter() {
-          return `${this.value}%`;
-        },
-        style: { 
-          color: "rgba(0,0,0,0.65)",
-          fontSize: "11px",
-          fontWeight: "500"
-        },
-      },
-      // Background color zones (matching screenshot)
-      plotBands: [
-        { 
-          from: 0, 
-          to: softMax, 
-          color: "rgba(255, 230, 230, 0.35)", // Light red for positive (unfavorable)
-          zIndex: 0 
-        },
-        { 
-          from: softMin, 
-          to: 0, 
-          color: "rgba(220, 250, 230, 0.35)", // Light green for negative (favorable)
-          zIndex: 0 
-        },
-      ],
-      plotLines: [
-        { 
-          value: 0, 
-          color: "rgba(0,0,0,0.3)", 
-          width: 2, 
-          zIndex: 5,
-          dashStyle: "Solid"
-        }
-      ],
-    },
-    legend: {
-      align: "left",
-      verticalAlign: "top",
-      layout: "horizontal",
-      itemStyle: { 
-        color: "rgba(0,0,0,0.75)", 
-        fontWeight: "500",
-        fontSize: "12px"
-      },
-      symbolRadius: 0,
-      symbolWidth: 16,
-      symbolHeight: 3,
-      itemMarginBottom: 8,
-    },
-    tooltip: {
-      shared: true,
-      borderColor: "rgba(0,0,0,0.15)",
-      backgroundColor: "#ffffff",
-      borderRadius: 8,
-      shadow: {
-        color: "rgba(0,0,0,0.1)",
-        offsetX: 0,
-        offsetY: 2,
-        opacity: 0.15,
-        width: 8
-      },
-      style: {
-        fontSize: "12px",
-        fontWeight: "500"
-      },
-      formatter() {
-        const header = `<b style="font-size: 13px;">${this.x}</b>`;
-        const lines = this.points.map((p) => {
-          if (p.series.type === "scatter") {
-            const c = p.point?.custom || {};
-            return `${c.emoji || "⚠️"} <b>${c.severity || "Alert"}</b> — ${
-              c.supplier || ""
-            }<br/><span style="opacity:.85; font-size: 11px;">${c.tooltip || ""}</span>`;
-          }
-          const isForecast = p.series.name.includes("Forecast");
-          const displayName = isForecast 
-            ? p.series.name.replace(" (Forecast)", "") + " (Forecast)"
-            : p.series.name;
-          return `<span style="color:${p.color}">●</span> ${displayName}: <b>${p.y}%</b>`;
-        });
-
-        if (showGlobal && this.points?.length) {
-          const xIdx =
-            this.points[0]?.point?.x ?? lineCategories.indexOf(this.x);
-          const evs = (eventsByX || {})[xIdx] || [];
-          evs.forEach((ev) => {
-            lines.push(
-              `<span style="color: #1976d2;">▌</span> <b>Global:</b> ${ev.label} — <span style="opacity:.85;">${
-                ev.country_name
-              }</span><br/><span style="opacity:.75; font-size: 11px;">${
-                ev.tooltip || ""
-              }</span>`
-            );
-          });
-        }
-        return `${header}<br/>${lines.join("<br/>")}`;
-      },
-    },
-    plotOptions: {
-      series: {
-        animation: false,
-        connectNulls: false,
-        states: { 
-          hover: { 
-            halo: { size: 8 },
-            lineWidthPlus: 1
-          }, 
-          inactive: { opacity: 0.3 } 
-        },
-      },
-      line: { 
-        marker: { 
-          lineWidth: 0,
-          radius: 4,
-          symbol: "circle"
-        },
-        lineWidth: 2.5
-      },
-      scatter: { 
-        tooltip: { pointFormat: "" },
-        marker: {
-          radius: 7
-        }
-      },
-    },
-    series: combinedSeries,
-    responsive: {
-      rules: [
-        {
-          condition: { maxWidth: 700 },
-          chartOptions: {
-            legend: { layout: "horizontal", align: "center" },
-            xAxis: { labels: { step: 2 } },
+      credits: { enabled: false },
+      exporting: { enabled: false },
+      xAxis: {
+        categories: lineCategories,
+        tickmarkPlacement: "on",
+        lineColor: "rgba(0,0,0,0.15)",
+        tickColor: "rgba(0,0,0,0.2)",
+        gridLineWidth: 1,
+        gridLineColor: "rgba(0,0,0,0.08)",
+        labels: {
+          style: {
+            color: "rgba(0,0,0,0.65)",
+            fontSize: "11px",
+            fontWeight: "500",
           },
         },
-      ],
-    },
-  };
-}, [lineCategories, combinedSeries, showGlobal, xPlotBands, eventsByX]);
+        plotBands: showGlobal ? xPlotBands : [],
+      },
+      yAxis: {
+        title: { text: null },
+        min,
+        max,
+        startOnTick: true,
+        endOnTick: true,
+        minPadding: 0.02,
+        maxPadding: 0.02,
+        gridLineColor: "rgba(0,0,0,0.1)",
+        gridLineWidth: 1,
+        tickAmount,
+        labels: {
+          formatter() {
+            return `${this.value}%`;
+          },
+          style: {
+            color: "rgba(0,0,0,0.65)",
+            fontSize: "11px",
+            fontWeight: "500",
+          },
+        },
+        plotBands: [
+          { from: 0, to: max, color: "rgba(255, 230, 230, 0.35)", zIndex: 0 },
+          { from: min, to: 0, color: "rgba(220, 250, 230, 0.35)", zIndex: 0 },
+        ],
+        plotLines: [
+          {
+            value: 0,
+            color: "rgba(0,0,0,0.3)",
+            width: 2,
+            zIndex: 5,
+            dashStyle: "Solid",
+          },
+        ],
+      },
+      legend: {
+        align: "left",
+        verticalAlign: "top",
+        layout: "horizontal",
+        itemStyle: {
+          color: "rgba(0,0,0,0.75)",
+          fontWeight: "500",
+          fontSize: "12px",
+        },
+        symbolRadius: 0,
+        symbolWidth: 16,
+        symbolHeight: 3,
+        itemMarginBottom: 8,
+      },
+      tooltip: {
+        shared: true,
+        borderColor: "rgba(0,0,0,0.15)",
+        backgroundColor: "#ffffff",
+        borderRadius: 8,
+        shadow: {
+          color: "rgba(0,0,0,0.1)",
+          offsetX: 0,
+          offsetY: 2,
+          opacity: 0.15,
+          width: 8,
+        },
+        style: {
+          fontSize: "12px",
+          fontWeight: "500",
+        },
+        formatter() {
+          const header = `<b style="font-size: 13px;">${this.x}</b>`;
+          const lines = this.points.map((p) => {
+            if (p.series.type === "scatter") {
+              const c = p.point?.custom || {};
+              return `${c.emoji || "⚠️"} <b>${c.severity || "Alert"}</b> — ${
+                c.supplier || ""
+              }<br/><span style="opacity:.85; font-size: 11px;">${
+                c.tooltip || ""
+              }</span>`;
+            }
+            const isForecast = p.series.name.includes(" (Forecast)");
+            const baseName = isForecast
+              ? p.series.name.replace(" (Forecast)", "")
+              : p.series.name;
+            const disp = isForecast ? `${baseName} (Forecast)` : baseName;
+            return `<span style="color:${p.color}">●</span> ${disp}: <b>${p.y}%</b>`;
+          });
 
+          if (showGlobal && this.points?.length) {
+            const xIdx =
+              this.points[0]?.point?.x ?? lineCategories.indexOf(this.x);
+            const evs = (eventsByX || {})[xIdx] || [];
+            evs.forEach((ev) => {
+              lines.push(
+                `<span style="color: #1976d2;">▌</span> <b>Global:</b> ${
+                  ev.label
+                } — <span style="opacity:.85;">${
+                  ev.country_name
+                }</span><br/><span style="opacity:.75; font-size: 11px;">${
+                  ev.tooltip || ""
+                }</span>`
+              );
+            });
+          }
+          return `${header}<br/>${lines.join("<br/>")}`;
+        },
+      },
+      plotOptions: {
+        series: {
+          animation: false,
+          connectNulls: false,
+          states: {
+            hover: { halo: { size: 8 }, lineWidthPlus: 1 },
+            inactive: { opacity: 0.3 },
+          },
+        },
+        line: {
+          marker: { lineWidth: 0, radius: 4, symbol: "circle" },
+          lineWidth: 2.5,
+        },
+        scatter: {
+          tooltip: { pointFormat: "" },
+          marker: { radius: 7 },
+        },
+      },
+      series: combinedSeries,
+      responsive: {
+        rules: [
+          {
+            condition: { maxWidth: 700 },
+            chartOptions: {
+              legend: { layout: "horizontal", align: "center" },
+              xAxis: { labels: { step: 2 } },
+            },
+          },
+        ],
+      },
+    };
+  }, [lineCategories, combinedSeries, showGlobal, xPlotBands, eventsByX]);
+
+  // ensure chart reflows when options/layout change
+  useLayoutEffect(() => {
+    chartRef.current?.chart?.reflow?.();
+  }, [options]);
 
   return (
     <Stack spacing="15px" sx={{ width: "100%" }}>
-      <Box sx={{ bgcolor: "background.paper", border: 1, borderColor: "grey.300" }}>
+      <Box
+        sx={{ bgcolor: "background.paper", border: 1, borderColor: "grey.300" }}
+      >
         <Tabs
           value={selectedTab}
-          onChange={(_, v) => {
-            setSelectedTab(v);
-            if (v === 2) navigate("/saq");
-          }}
+          onChange={(_, v) => setSelectedTab(v)}
           TabIndicatorProps={{ sx: { display: "none" } }}
           sx={{
             minHeight: "auto",
@@ -881,187 +1158,204 @@ const options = useMemo(() => {
         </Tabs>
       </Box>
 
-      {/* Savings cards */}
-      <Card sx={{ p: "15px", border: 1, borderColor: "grey.400" }}>
-        <Stack spacing="15px">
-          <Typography
-            variant="h6"
-            sx={{ fontWeight: 600, fontSize: "16px", color: "text.secondary" }}
+      {/* ===== TAB 0: PPV Forecast ===== */}
+      {selectedTab === 0 && (
+        <>
+          <SavingsBySupplier />
+
+          {/* Chart */}
+          <Box
+            sx={{
+              position: "relative",
+              bgcolor: "background.paper",
+              border: 1,
+              borderColor: "grey.400",
+              width: "100%",
+              p: 1,
+            }}
           >
-            Savings by supplier in $
-          </Typography>
-
-          <Stack direction="row" spacing={2.5} flexWrap="wrap">
-            {savingsCards.map((item, index) => (
-              <Card
-                key={index}
-                sx={{ width: 262, p: 1.25, border: 1, borderColor: "grey.400" }}
-              >
-                <CardContent sx={{ p: 0, "&:last-child": { pb: 0 } }}>
-                  <Stack direction="row" spacing="15px" alignItems="center">
-                    <Avatar
-                      sx={{
-                        width: 40,
-                        height: 40,
-                        bgcolor: "rgba(68, 167, 247, 0.3)",
-                      }}
-                    >
-                      <Box
-                        component="img"
-                        src="https://c.animaapp.com/nHl4a9qr/img/cash-coin-2.svg"
-                        alt="Cash coin"
-                        sx={{ width: 25, height: 25 }}
-                      />
-                    </Avatar>
-                    <Stack spacing={0.5} flex={1}>
-                      <Typography
-                        sx={{
-                          fontFamily: "Poppins, Helvetica",
-                          fontWeight: item.isNegative ? 600 : 500,
-                          fontSize: "20px",
-                          lineHeight: "22px",
-                          color: item.color,
-                        }}
-                      >
-                        {item.amount}
-                      </Typography>
-                      <Typography
-                        sx={{
-                          fontFamily: "Poppins, Helvetica",
-                          fontWeight: 500,
-                          fontSize: "14px",
-                          lineHeight: "24px",
-                          color: "rgba(0, 0, 0, 0.5)",
-                        }}
-                      >
-                        {item.supplier}
-                      </Typography>
-                    </Stack>
-                  </Stack>
-                </CardContent>
-              </Card>
-            ))}
-          </Stack>
-        </Stack>
-      </Card>
-
-      {/* Chart */}
-      <Box
-        sx={{
-          position: "relative",
-          bgcolor: "background.paper",
-          border: 1,
-          borderColor: "grey.400",
-          width: "100%",
-          p: 1,
-        }}
-      >
-        <Stack
-          spacing="9px"
-          sx={{ position: "absolute", top: 8, left: 8, right: 8, zIndex: 2 }}
-        >
-          <Stack
-            direction="row"
-            spacing={1.25}
-            alignItems="center"
-            flexWrap="wrap"
-          >
-            <Stack direction="row" spacing={1.25}>
-              {["W", "M", "Q"].map((p) => (
-                <Box
-                  key={p}
-                  sx={{
-                    width: 38,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    px: 1.25,
-                    py: 0,
-                    borderRadius: "50px",
-                    border: 1,
-                    borderColor: "primary.dark",
-                    cursor: "pointer",
-                    bgcolor:
-                      selectedPeriod === p ? "primary.main" : "transparent",
-                  }}
-                  onClick={() => setSelectedPeriod(p)}
-                >
-                  <Typography
-                    sx={{
-                      fontWeight: 600,
-                      fontSize: "12px",
-                      color:
-                        selectedPeriod === p
-                          ? "background.paper"
-                          : "text.primary",
-                    }}
-                  >
-                    {p}
-                  </Typography>
-                </Box>
-              ))}
-            </Stack>
-
-            <Stack direction="row" spacing={1.25} alignItems="center">
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={showForecast}
-                    onChange={(e) => setShowForecast(e.target.checked)}
-                  />
-                }
-                label="6 Months Forecast"
-                sx={{
-                  "& .MuiFormControlLabel-label": {
-                    fontSize: "14px",
-                    color: "text.primary",
-                  },
-                }}
-              />
-              <KeyboardArrowDownIcon sx={{ width: 16, height: 16 }} />
-            </Stack>
-
-            <FormControlLabel
-              control={
-                <Checkbox checked={showGlobal} onChange={handleGlobalToggle} />
-              }
-              label="Global Events"
-              sx={{
-                "& .MuiFormControlLabel-label": {
-                  fontSize: "14px",
-                  color: "text.secondary",
-                },
-              }}
-            />
-            <FormControlLabel
-              control={
-                <Checkbox checked={showAlerts} onChange={handleAlertsToggle} />
-              }
-              label="Alerts"
-              sx={{
-                "& .MuiFormControlLabel-label": {
-                  fontSize: "14px",
-                  color: "text.secondary",
-                },
-              }}
-            />
-          </Stack>
-        </Stack>
-
-        <Box sx={{ pt: 6 }}>
-          {chartLoading ? (
             <Stack
-              alignItems="center"
-              justifyContent="center"
-              sx={{ height: 420 }}
+              spacing="9px"
+              sx={{
+                position: "absolute",
+                top: 8,
+                left: 8,
+                right: 8,
+                zIndex: 2,
+              }}
             >
-              <CircularProgress />
+              <Stack
+                direction="row"
+                spacing={1.25}
+                alignItems="center"
+                flexWrap="wrap"
+              >
+                <Stack direction="row" spacing={1.25}>
+                  {["W", "M", "Q"].map((p) => (
+                    <Box
+                      key={p}
+                      sx={{
+                        width: 38,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        px: 1.25,
+                        py: 0,
+                        borderRadius: "50px",
+                        border: 1,
+                        borderColor: "primary.dark",
+                        cursor: "pointer",
+                        bgcolor:
+                          selectedPeriod === p ? "primary.main" : "transparent",
+                      }}
+                      onClick={() => setSelectedPeriod(p)}
+                    >
+                      <Typography
+                        sx={{
+                          fontWeight: 600,
+                          fontSize: "12px",
+                          color:
+                            selectedPeriod === p
+                              ? "background.paper"
+                              : "text.primary",
+                        }}
+                      >
+                        {p}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Stack>
+
+                <Stack direction="row" spacing={1.25} alignItems="center">
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={showForecast}
+                        onChange={(e) => setShowForecast(e.target.checked)}
+                      />
+                    }
+                    label="6 Months Forecast"
+                    sx={{
+                      "& .MuiFormControlLabel-label": {
+                        fontSize: "14px",
+                        color: "text.primary",
+                      },
+                    }}
+                  />
+                  <KeyboardArrowDownIcon sx={{ width: 16, height: 16 }} />
+                </Stack>
+
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={showGlobal}
+                      onChange={handleGlobalToggle}
+                    />
+                  }
+                  label="Global Events"
+                  sx={{
+                    "& .MuiFormControlLabel-label": {
+                      fontSize: "14px",
+                      color: "text.secondary",
+                    },
+                  }}
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={showAlerts}
+                      onChange={handleAlertsToggle}
+                    />
+                  }
+                  label="Alerts"
+                  sx={{
+                    "& .MuiFormControlLabel-label": {
+                      fontSize: "14px",
+                      color: "text.secondary",
+                    },
+                  }}
+                />
+              </Stack>
             </Stack>
-          ) : (
-            <HighchartsReact highcharts={Highcharts} options={options} />
-          )}
+
+            <Box sx={{ pt: 6 }}>
+              {chartLoading ? (
+                <Stack
+                  alignItems="center"
+                  justifyContent="center"
+                  sx={{ height: 420 }}
+                >
+                  <CircularProgress />
+                </Stack>
+              ) : (
+                <HighchartsReact
+                  ref={chartRef}
+                  highcharts={Highcharts}
+                  options={options}
+                />
+              )}
+            </Box>
+          </Box>
+
+          <Divider sx={{ my: 1.25 }} />
+
+          {/* Heatmap only for PPV tab */}
+          <SupplierDataTableSection
+            startDate={startDate}
+            endDate={endDate}
+            countryIds={countryIds}
+            stateIds={stateIds}
+            plantIds={plantIds}
+            skuIds={skuIds}
+            supplierIds={supplierIds}
+            supplierLocations={supplierLocations}
+          />
+        </>
+      )}
+
+      {/* ===== TAB 1: Scorecard (placeholder) ===== */}
+      {selectedTab === 1 && (
+        <Box
+          sx={{
+            bgcolor: "background.paper",
+            border: 1,
+            borderColor: "grey.400",
+            p: 2,
+          }}
+        >
+          <Scorecard
+            startDate={startDate}
+            endDate={endDate}
+            supplierIds={supplierIds}
+            skuIds={skuIds}
+            plantIds={plantIds}
+            countryIds={countryIds}
+            stateIds={stateIds}
+          />
         </Box>
-      </Box>
+      )}
+
+      {/* ===== TAB 2: SAQ (render inside page, headers stay) ===== */}
+      {selectedTab === 2 && (
+        <Box
+          sx={{
+            bgcolor: "background.paper",
+            border: 1,
+            borderColor: "grey.400",
+            p: 1,
+          }}
+        >
+          <SAQ
+            startDate={startDate}
+            endDate={endDate}
+            supplierIds={supplierIds}
+            skuIds={skuIds}
+            plantIds={plantIds}
+            countryIds={countryIds}
+            stateIds={stateIds}
+          />
+        </Box>
+      )}
     </Stack>
   );
 };
@@ -1077,8 +1371,8 @@ const SupplierDataTableSection = ({
   supplierLocations = [],
 }) => {
   const [rows, setRows] = useState([]);
-  const [columns, setColumns] = useState([]); // [{ key, date }]
-  const [yearGroups, setYearGroups] = useState([]); // [{ year, months, lastIndex }]
+  const [columns, setColumns] = useState([]);
+  const [yearGroups, setYearGroups] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const COL_PX = 72;
@@ -1103,11 +1397,6 @@ const SupplierDataTableSection = ({
     if (bg === "#ef9a9a") return "#546e7a";
     return "#607d8b";
   };
-  const fmtCell = (v) => {
-    const n = typeof v === "string" ? parseFloat(v) : v;
-    if (!Number.isFinite(n)) return "";
-    return Number.isInteger(n) ? String(n) : n.toFixed(1);
-  };
 
   useEffect(() => {
     const load = async () => {
@@ -1123,7 +1412,10 @@ const SupplierDataTableSection = ({
           supplierIds,
           supplierLocations,
         };
-        const { data } = await axios.post(`${API_BASE_URL}/getHeatMap`, payload);
+        const { data } = await axios.post(
+          `${API_BASE_URL}/getHeatMap`,
+          payload
+        );
         const arr = Array.isArray(data) ? data : [];
 
         const keys = new Set();
@@ -1163,7 +1455,16 @@ const SupplierDataTableSection = ({
       }
     };
     load();
-  }, [startDate, endDate, countryIds, stateIds, plantIds, skuIds, supplierIds, supplierLocations]);
+  }, [
+    startDate,
+    endDate,
+    countryIds,
+    stateIds,
+    plantIds,
+    skuIds,
+    supplierIds,
+    supplierLocations,
+  ]);
 
   const lastOfYearIdx = useMemo(
     () => new Set(yearGroups.map((g) => g.lastIndex)),
@@ -1358,7 +1659,11 @@ const SupplierDataTableSection = ({
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {fmtCell(val)}
+                    {Number.isFinite(val)
+                      ? Number.isInteger(val)
+                        ? String(val)
+                        : val.toFixed(1)
+                      : ""}
                   </Typography>
                 </Box>
               );
@@ -1425,7 +1730,7 @@ export const DemandProjectMonth = () => {
     plants: [],
     skus: [],
     suppliers: [],
-    supplierLocations: [], // [{ supplier_location: 'USA' }]
+    supplierLocations: [],
   });
 
   // Selected filters
@@ -1433,8 +1738,10 @@ export const DemandProjectMonth = () => {
   const [selectedState, setSelectedState] = useState([]);
   const [selectedPlants, setSelectedPlants] = useState([]);
   const [selectedSKUs, setSelectedSKUs] = useState([]);
-  const [selectedSuppliers, setSelectedSuppliers] = useState([]); // supplier_id[]
-  const [selectedSupplierLocations, setSelectedSupplierLocations] = useState([]); // country strings
+  const [selectedSuppliers, setSelectedSuppliers] = useState([]);
+  const [selectedSupplierLocations, setSelectedSupplierLocations] = useState(
+    []
+  );
 
   // Loading flags
   const [loadingCountries, setLoadingCountries] = useState(false);
@@ -1442,9 +1749,10 @@ export const DemandProjectMonth = () => {
   const [loadingPlants, setLoadingPlants] = useState(false);
   const [loadingSkus, setLoadingSkus] = useState(false);
   const [loadingSuppliers, setLoadingSuppliers] = useState(false);
-  const [loadingSupplierLocations, setLoadingSupplierLocations] = useState(false);
+  const [loadingSupplierLocations, setLoadingSupplierLocations] =
+    useState(false);
 
-  // Savings cards data from API
+  // Savings cards data from API (kept in case you wire it later)
   const [savingsCards, setSavingsCards] = useState([]);
   const [loadingSavings, setLoadingSavings] = useState(false);
 
@@ -1649,7 +1957,9 @@ export const DemandProjectMonth = () => {
       .get(`${API_BASE_URL}/getAllSuppliers`)
       .then((res) => {
         const allSuppliers = Array.isArray(res.data) ? res.data : [];
-        const selectedIdSet = new Set(selectedSuppliers.map((id) => Number(id)));
+        const selectedIdSet = new Set(
+          selectedSuppliers.map((id) => Number(id))
+        );
 
         const matched = allSuppliers.filter((s) =>
           selectedIdSet.has(Number(s.supplier_id))
@@ -1685,7 +1995,7 @@ export const DemandProjectMonth = () => {
     setSelectedSupplierLocations([]);
   }, [selectedSuppliers]);
 
-  /* --------- Savings cards --------- */
+  /* --------- Savings cards (optional fetch, not rendered directly) --------- */
   useEffect(() => {
     const fmt = (num) =>
       (num < 0 ? "-$" : "$") +
@@ -1699,7 +2009,6 @@ export const DemandProjectMonth = () => {
       .get(`${API_BASE_URL}/getSupplierSavings`)
       .then((res) => {
         const arr = Array.isArray(res.data) ? res.data : [];
-
         const cards = arr.map((row) => {
           const val = parseFloat(row.total_savings_dollars);
           return {
@@ -1709,7 +2018,6 @@ export const DemandProjectMonth = () => {
             color: val < 0 ? "#ef4444" : "#16a34a",
           };
         });
-
         setSavingsCards(cards);
       })
       .catch(() => setSavingsCards([]))
@@ -1958,6 +2266,7 @@ export const DemandProjectMonth = () => {
             disabled={selectedPlants.length === 0}
             onOpen={fetchSkus}
             width={130}
+            single
           />
 
           {/* Suppliers (after SKU) */}
@@ -1978,10 +2287,10 @@ export const DemandProjectMonth = () => {
           {/* Supplier Location (after Suppliers) */}
           <MultiSelectWithCheckboxes
             label="Supplier Location"
-            options={filtersData.supplierLocations} // [{ supplier_location: 'USA' }]
+            options={filtersData.supplierLocations}
             optionKey="supplier_location"
             displayKey="supplier_location"
-            selected={selectedSupplierLocations} // ['USA', 'India']
+            selected={selectedSupplierLocations}
             setSelected={setSelectedSupplierLocations}
             searchPlaceholder="Search location"
             loading={loadingSupplierLocations}
@@ -2043,8 +2352,10 @@ export const DemandProjectMonth = () => {
         </Stack>
       </Box>
 
-      {/* ======= NEW CONTENT: Chart + Table ======= */}
-      <Box sx={{ bgcolor: "#EFF6FF", minHeight: "calc(100vh - 56px)", p: 1.25 }}>
+      {/* ======= CONTENT: Chart/Heatmap or SAQ via tabs ======= */}
+      <Box
+        sx={{ bgcolor: "#EFF6FF", minHeight: "calc(100vh - 56px)", p: 1.25 }}
+      >
         <DataVisualizationSection
           startDate={dateRange.startDate}
           endDate={dateRange.endDate}
@@ -2055,18 +2366,6 @@ export const DemandProjectMonth = () => {
           supplierIds={selectedSuppliers}
           supplierLocations={selectedSupplierLocations}
           savingsCards={loadingSavings ? [] : savingsCards}
-        />
-
-        <Divider sx={{ my: 1.25 }} />
-        <SupplierDataTableSection
-          startDate={dateRange.startDate}
-          endDate={dateRange.endDate}
-          countryIds={selectedCountry}
-          stateIds={selectedState}
-          plantIds={selectedPlants}
-          skuIds={selectedSKUs}
-          supplierIds={selectedSuppliers}
-          supplierLocations={selectedSupplierLocations}
         />
       </Box>
 
