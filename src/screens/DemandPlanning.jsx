@@ -574,22 +574,11 @@ const DataVisualizationSection = ({
     const fetchChart = async () => {
       setChartLoading(true);
       try {
-        // const payload = {
-        //   startDate,
-        //   endDate,
-        //   countryIds,
-        //   stateIds,
-        //   plantIds,
-        //   skuIds,
-        //   supplierIds,
-        //   supplierLocations,
-        //   includeForecast: true,
-        // };
         const payload = {
           startDate,
           endDate,
           skuId: Array.isArray(skuIds) ? skuIds[0] ?? null : skuIds,
-          // keep other filters if you still use them:
+          // optional additional filters
           countryIds,
           stateIds,
           plantIds,
@@ -1921,74 +1910,82 @@ export const DemandProjectMonth = () => {
     }));
   }, [selectedPlants]);
 
-  /* --------- SKU -> SUPPLIERS --------- */
-  const fetchSuppliers = () => {
-    if (!selectedSKUs.length) return;
-    setLoadingSuppliers(true);
-    axios
-      .get(`${API_BASE_URL}/getAllSuppliers`)
-      .then((res) => {
-        setFiltersData((prev) => ({
-          ...prev,
-          suppliers: Array.isArray(res.data) ? res.data : [],
-        }));
-      })
-      .catch(() =>
-        setFiltersData((prev) => ({
-          ...prev,
-          suppliers: [],
-        }))
-      )
-      .finally(() => setLoadingSuppliers(false));
-  };
+  /* --------- SKU -> SUPPLIERS (uses /suppliers-by-sku) --------- */
+  // const fetchSuppliers = async () => {
+  //   if (!selectedSKUs.length) return;
+  //   const skuId = Array.isArray(selectedSKUs) ? selectedSKUs[0] : selectedSKUs;
+  //   if (!skuId) return;
+  //   setLoadingSuppliers(true);
+  //   try {
+  //     const { data } = await axios.post(`${API_BASE_URL}/suppliers/by-sku`, {
+  //       sku_id: Number(skuId),
+  //     });
+  //     setFiltersData((prev) => ({
+  //       ...prev,
+  //       suppliers: Array.isArray(data) ? data : [],
+  //     }));
+  //   } catch (e) {
+  //     setFiltersData((prev) => ({ ...prev, suppliers: [] }));
+  //   } finally {
+  //     setLoadingSuppliers(false);
+  //   }
+  // };
 
-  useEffect(() => {
-    setSelectedSuppliers([]);
-    setSelectedSupplierLocations([]);
-    setFiltersData((prev) => ({ ...prev, supplierLocations: [] }));
-  }, [selectedSKUs]);
+  // useEffect(() => {
+  //   setSelectedSuppliers([]);
+  //   setSelectedSupplierLocations([]);
+  //   setFiltersData((prev) => ({ ...prev, supplierLocations: [] }));
+  // }, [selectedSKUs]);
+  // replace your fetchSuppliers body with this:
+const fetchSuppliers = async () => {
+  if (!selectedSKUs.length) return;
+  const skuId = Array.isArray(selectedSKUs) ? selectedSKUs[0] : selectedSKUs;
+  if (!skuId || !Number.isFinite(Number(skuId))) return;
 
-  /* --------- SUPPLIERS -> SUPPLIER LOCATIONS --------- */
+  setLoadingSuppliers(true);
+  try {
+    const { data } = await axios.post(`${API_BASE_URL}/suppliers/by-sku`, {
+      skuId: Number(skuId),
+    });
+    setFiltersData(prev => ({
+      ...prev,
+      suppliers: Array.isArray(data) ? data : [],
+    }));
+  } catch {
+    setFiltersData(prev => ({ ...prev, suppliers: [] }));
+  } finally {
+    setLoadingSuppliers(false);
+  }
+};
+
+
+  /* --------- SUPPLIERS -> SUPPLIER LOCATIONS (derived from suppliers) --------- */
   const fetchSupplierLocations = () => {
     if (!selectedSuppliers.length) return;
-    setLoadingSupplierLocations(true);
 
-    axios
-      .get(`${API_BASE_URL}/getAllSuppliers`)
-      .then((res) => {
-        const allSuppliers = Array.isArray(res.data) ? res.data : [];
-        const selectedIdSet = new Set(
-          selectedSuppliers.map((id) => Number(id))
-        );
+    const allSuppliers = filtersData.suppliers || [];
+    const selectedIdSet = new Set(selectedSuppliers.map((id) => Number(id)));
 
-        const matched = allSuppliers.filter((s) =>
-          selectedIdSet.has(Number(s.supplier_id))
-        );
+    const matched = allSuppliers.filter((s) =>
+      selectedIdSet.has(Number(s.supplier_id))
+    );
 
-        const countries = Array.from(
-          new Set(
-            matched
-              .map((s) => String(s.supplier_country || "").trim())
-              .filter(Boolean)
-          )
-        );
-
-        const locationOptions = countries.map((c) => ({
-          supplier_location: c,
-        }));
-
-        setFiltersData((prev) => ({
-          ...prev,
-          supplierLocations: locationOptions,
-        }));
-      })
-      .catch(() =>
-        setFiltersData((prev) => ({
-          ...prev,
-          supplierLocations: [],
-        }))
+    const countries = Array.from(
+      new Set(
+        matched
+          .map((s) => String(s.supplier_country || "").trim())
+          .filter(Boolean)
       )
-      .finally(() => setLoadingSupplierLocations(false));
+    );
+
+    const locationOptions = countries.map((c) => ({
+      supplier_location: c,
+    }));
+
+    setFiltersData((prev) => ({
+      ...prev,
+      supplierLocations: locationOptions,
+    }));
   };
 
   useEffect(() => {
