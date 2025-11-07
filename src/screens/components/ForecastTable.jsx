@@ -33,6 +33,7 @@ import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import ArrowUpwardRoundedIcon from "@mui/icons-material/ArrowUpwardRounded";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL;
+// const API_BASE_URL = 'http://localhost:5002/api';
 
 const Z_INDEX_LAYERS = {
   TABLE_CELL: 1,

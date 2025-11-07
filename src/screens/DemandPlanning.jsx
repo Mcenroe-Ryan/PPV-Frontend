@@ -55,10 +55,14 @@ import HighchartsReact from "highcharts-react-official";
 import Scorecard from "./components/Scorecard";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL;
+// const API_BASE_URL = "http://localhost:5002/api";
+
+/* ===================== Simple listbox for More menu ===================== */
 
 const Listbox = () => {
   const listItems = [{ id: 1, label: "Product Name" }];
   const [checked, setChecked] = useState([]);
+
   const handleToggle = (value) => () => {
     const currentIndex = checked.indexOf(value);
     const newChecked = [...checked];
@@ -66,6 +70,7 @@ const Listbox = () => {
     else newChecked.splice(currentIndex, 1);
     setChecked(newChecked);
   };
+
   return (
     <Box sx={{ bgcolor: "#EFF6FF", px: 0.5, py: 0.5, minWidth: 180 }}>
       <List disablePadding>
@@ -122,7 +127,8 @@ const Listbox = () => {
   );
 };
 
-/** ===================== New Savings component ===================== **/
+/* ===================== Savings by supplier (dummy UI) ===================== */
+
 const SAVINGS_SUPPLIER_DATA = [
   {
     country: "India",
@@ -326,11 +332,14 @@ function SavingsBySupplier() {
     </Box>
   );
 }
-/** =================== /New Savings component =================== **/
+
+/* ===================== Transition for Chatbot dialog ===================== */
 
 const SlideTransition = forwardRef(function Transition(props, ref) {
   return <Slide direction="left" ref={ref} {...props} />;
 });
+
+/* ===================== Multi-select pill (AUTO-SIZE) ===================== */
 
 function MultiSelectWithCheckboxes({
   label,
@@ -339,7 +348,7 @@ function MultiSelectWithCheckboxes({
   displayKey,
   selected,
   setSelected,
-  width = 155,
+  width, // optional: used as minWidth
   searchPlaceholder = "",
   loading = false,
   disabled = false,
@@ -368,6 +377,7 @@ function MultiSelectWithCheckboxes({
     setAnchorEl(event.currentTarget);
     if (onOpen) onOpen();
   };
+
   const handleClose = () => setAnchorEl(null);
 
   useEffect(() => {
@@ -394,16 +404,21 @@ function MultiSelectWithCheckboxes({
 
   const getButtonLabel = () => {
     if (selected.length === 0) return label;
+
     if (single && selected.length === 1) {
       const found = safeOptions.find((opt) => opt[optionKey] === selected[0]);
       return found?.[displayKey || optionKey] || label;
     }
+
     if (!single && selected.length === 1) {
       const found = safeOptions.find((opt) => opt[optionKey] === selected[0]);
       return found?.[displayKey || optionKey] || label;
     }
+
     return `${selected.length} selected`;
   };
+
+  const buttonLabel = getButtonLabel();
 
   return (
     <>
@@ -411,23 +426,23 @@ function MultiSelectWithCheckboxes({
         variant="outlined"
         size="small"
         onClick={handleOpen}
+        disabled={disabled}
         sx={{
-          minWidth: 120,
           flexShrink: 0,
-          whiteSpace: "nowrap",
+          width: "auto",
+          minWidth: width || 120,
+          maxWidth: 260,
+          px: 1.5,
           bgcolor: "common.white",
           borderColor: "#bdbdbd",
           fontWeight: 400,
           textTransform: "none",
-          px: 1.5,
           transition: "all 0.2s ease",
           display: "flex",
-          justifyContent: "space-between",
           alignItems: "center",
-          width,
+          justifyContent: "space-between",
           "& .MuiButton-endIcon": { m: 0 },
         }}
-        disabled={disabled}
         endIcon={
           !single && selected.length > 0 ? (
             <Stack direction="row" alignItems="center" spacing={0.5}>
@@ -448,8 +463,24 @@ function MultiSelectWithCheckboxes({
           )
         }
       >
-        <Box sx={{ display: "flex", alignItems: "center" }}>
-          {getButtonLabel()}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            maxWidth: "100%",
+            overflow: "hidden",
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: 13,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {buttonLabel}
+          </Typography>
         </Box>
       </Button>
 
@@ -517,8 +548,10 @@ function MultiSelectWithCheckboxes({
   );
 }
 
+/* ===================== DataVisualizationSection ===================== */
+
 const DataVisualizationSection = ({
-  savingsCards, // kept for compatibility, not used now
+  savingsCards,
   startDate,
   endDate,
   countryIds = [],
@@ -531,29 +564,23 @@ const DataVisualizationSection = ({
   const [selectedTab, setSelectedTab] = useState(0);
   const [selectedPeriod, setSelectedPeriod] = useState("M");
 
-  // Base line chart
   const [lineCategories, setLineCategories] = useState([]);
   const [lineSeries, setLineSeries] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
 
-  // Toggles
   const [showForecast, setShowForecast] = useState(true);
   const [showAlerts, setShowAlerts] = useState(false);
   const [showGlobal, setShowGlobal] = useState(false);
 
-  // Alerts overlay (scatter dots)
   const [alertsRaw, setAlertsRaw] = useState([]);
   const [alertSeries, setAlertSeries] = useState([]);
 
-  // Global Events overlay (vertical bars)
   const [globalRaw, setGlobalRaw] = useState([]);
   const [xPlotBands, setXPlotBands] = useState([]);
   const [eventsByX, setEventsByX] = useState({});
 
-  // chart ref for reflow
   const chartRef = useRef(null);
 
-  /* Helpers */
   const firstOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
   const buildMonthlyRange = (start, end) => {
     const out = [];
@@ -566,11 +593,13 @@ const DataVisualizationSection = ({
     return out;
   };
 
-  /* --------- Fetch base line chart (actual + forecast) --------- */
+  /* -------- Base line chart -------- */
+
   useEffect(() => {
     if (!startDate || !endDate) return;
 
     const controller = new AbortController();
+
     const fetchChart = async () => {
       setChartLoading(true);
       try {
@@ -578,7 +607,6 @@ const DataVisualizationSection = ({
           startDate,
           endDate,
           skuId: Array.isArray(skuIds) ? skuIds[0] ?? null : skuIds,
-          // optional additional filters
           countryIds,
           stateIds,
           plantIds,
@@ -703,7 +731,8 @@ const DataVisualizationSection = ({
     showForecast,
   ]);
 
-  /* --------- Alerts overlay --------- */
+  /* -------- Alerts overlay -------- */
+
   const fetchAlerts = async () => {
     try {
       const { data } = await axios.get(`${API_BASE_URL}/getAlerts`);
@@ -750,7 +779,6 @@ const DataVisualizationSection = ({
       const supplierSeries = seriesBySupplier.get(a.supplier_name);
       if (!supplierSeries) continue;
 
-      // Try actual; if null and forecast exists + showForecast, use forecast
       let yVal = supplierSeries.data?.[xIndex];
       if ((yVal == null || Number.isNaN(yVal)) && showForecast) {
         const forecastSeries = lineSeries.find(
@@ -811,7 +839,8 @@ const DataVisualizationSection = ({
     }
   };
 
-  /* --------- Global Events overlay (vertical bars) --------- */
+  /* -------- Global Events overlay -------- */
+
   const fetchGlobalEvents = async () => {
     try {
       const { data } = await axios.get(`${API_BASE_URL}/getGlobalEvents`);
@@ -875,7 +904,8 @@ const DataVisualizationSection = ({
     }
   };
 
-  /** --------- Dynamic bounds & height helpers (AUTO SCALE) --------- **/
+  /* -------- Helpers: dynamic Y bounds & height -------- */
+
   const computeYBounds = (seriesArr) => {
     const ys = [];
     for (const s of seriesArr || []) {
@@ -897,7 +927,7 @@ const DataVisualizationSection = ({
       min -= bump;
       max += bump;
     } else {
-      const pad = (max - min) * 0.1; // 10% padding
+      const pad = (max - min) * 0.1;
       min -= pad;
       max += pad;
     }
@@ -911,7 +941,6 @@ const DataVisualizationSection = ({
     min = roundDown(min);
     max = roundUp(max);
 
-    // Keep a clear zero line zone if we cross around 0
     if (max > -0.1 && min < 0.1) {
       const halo = Math.max(5, stepBase * 3);
       min = Math.min(min, -halo);
@@ -930,14 +959,15 @@ const DataVisualizationSection = ({
     const { span } = computeYBounds(seriesArr);
 
     const base = 360;
-    const perSeries = 28; // pixels per series beyond 2
-    const spanFactor = Math.min(1.6, Math.max(0, span / 20)) * 80; // ~0..128 px
+    const perSeries = 28;
+    const spanFactor = Math.min(1.6, Math.max(0, span / 20)) * 80;
     const height = base + Math.max(0, baseCount - 2) * perSeries + spanFactor;
 
     return Math.max(320, Math.min(760, Math.round(height)));
   };
 
-  /* --------- Highcharts options (dynamic Y-range + height) --------- */
+  /* -------- Highcharts options -------- */
+
   const options = useMemo(() => {
     const { min, max, span } = computeYBounds(combinedSeries);
     const dynamicHeight = computeChartHeight(combinedSeries);
@@ -1105,7 +1135,6 @@ const DataVisualizationSection = ({
     };
   }, [lineCategories, combinedSeries, showGlobal, xPlotBands, eventsByX]);
 
-  // ensure chart reflows when options/layout change
   useLayoutEffect(() => {
     chartRef.current?.chart?.reflow?.();
   }, [options]);
@@ -1147,12 +1176,11 @@ const DataVisualizationSection = ({
         </Tabs>
       </Box>
 
-      {/* ===== TAB 0: PPV Forecast ===== */}
+      {/* TAB 0: PPV Forecast */}
       {selectedTab === 0 && (
         <>
           <SavingsBySupplier />
 
-          {/* Chart */}
           <Box
             sx={{
               position: "relative",
@@ -1249,6 +1277,7 @@ const DataVisualizationSection = ({
                     },
                   }}
                 />
+
                 <FormControlLabel
                   control={
                     <Checkbox
@@ -1288,7 +1317,6 @@ const DataVisualizationSection = ({
 
           <Divider sx={{ my: 1.25 }} />
 
-          {/* Heatmap only for PPV tab */}
           <SupplierDataTableSection
             startDate={startDate}
             endDate={endDate}
@@ -1302,7 +1330,7 @@ const DataVisualizationSection = ({
         </>
       )}
 
-      {/* ===== TAB 1: Scorecard (placeholder) ===== */}
+      {/* TAB 1: Scorecard */}
       {selectedTab === 1 && (
         <Box
           sx={{
@@ -1324,7 +1352,7 @@ const DataVisualizationSection = ({
         </Box>
       )}
 
-      {/* ===== TAB 2: SAQ (render inside page, headers stay) ===== */}
+      {/* TAB 2: SAQ */}
       {selectedTab === 2 && (
         <Box
           sx={{
@@ -1348,6 +1376,8 @@ const DataVisualizationSection = ({
     </Stack>
   );
 };
+
+/* ===================== Heatmap / SupplierDataTableSection ===================== */
 
 const SupplierDataTableSection = ({
   startDate,
@@ -1381,6 +1411,7 @@ const SupplierDataTableSection = ({
       return "#c8e6c9";
     }
   };
+
   const textFor = (v, bg) => {
     if (Math.abs(v ?? 0) >= 7) return "#ffffff";
     if (bg === "#ef9a9a") return "#546e7a";
@@ -1401,6 +1432,7 @@ const SupplierDataTableSection = ({
           supplierIds,
           supplierLocations,
         };
+
         const { data } = await axios.post(
           `${API_BASE_URL}/getHeatMap`,
           payload
@@ -1433,6 +1465,7 @@ const SupplierDataTableSection = ({
           g.months.push(m);
           g.lastIndex = idx;
         });
+
         setYearGroups(Array.from(ymap.values()));
         setRows(arr);
       } catch {
@@ -1443,6 +1476,7 @@ const SupplierDataTableSection = ({
         setLoading(false);
       }
     };
+
     load();
   }, [
     startDate,
@@ -1671,10 +1705,11 @@ const SupplierDataTableSection = ({
   );
 };
 
+/* ===================== Main: DemandProjectMonth ===================== */
+
 export const DemandProjectMonth = () => {
   const navigate = useNavigate();
 
-  // Horizontal drag state for the toolbar row
   const scrollRef = useRef(null);
   const isDown = useRef(false);
   const startX = useRef(0);
@@ -1705,14 +1740,12 @@ export const DemandProjectMonth = () => {
     scrollRef.current.scrollLeft = scrollLeft.current - walk;
   };
 
-  // Date range for the filter
   const [dateFilterKey, setDateFilterKey] = useState(0);
   const [dateRange, setDateRange] = useState({
     startDate: format(subMonths(new Date("2024-12-01"), 6), "yyyy-MM-dd"),
     endDate: format(addMonths(new Date("2025-12-31"), 6), "yyyy-MM-dd"),
   });
 
-  // Filter datasets
   const [filtersData, setFiltersData] = useState({
     countries: [],
     states: [],
@@ -1722,7 +1755,6 @@ export const DemandProjectMonth = () => {
     supplierLocations: [],
   });
 
-  // Selected filters
   const [selectedCountry, setSelectedCountry] = useState([]);
   const [selectedState, setSelectedState] = useState([]);
   const [selectedPlants, setSelectedPlants] = useState([]);
@@ -1732,7 +1764,6 @@ export const DemandProjectMonth = () => {
     []
   );
 
-  // Loading flags
   const [loadingCountries, setLoadingCountries] = useState(false);
   const [loadingStates, setLoadingStates] = useState(false);
   const [loadingPlants, setLoadingPlants] = useState(false);
@@ -1741,19 +1772,18 @@ export const DemandProjectMonth = () => {
   const [loadingSupplierLocations, setLoadingSupplierLocations] =
     useState(false);
 
-  // Savings cards data from API (kept in case you wire it later)
   const [savingsCards, setSavingsCards] = useState([]);
   const [loadingSavings, setLoadingSavings] = useState(false);
 
-  // “More” menu
   const [moreAnchorEl, setMoreAnchorEl] = useState(null);
   const handleMoreOpen = (event) => setMoreAnchorEl(event.currentTarget);
   const handleMoreClose = () => setMoreAnchorEl(null);
 
-  // Chatbot panel
   const [isChatBotOpen, setIsChatBotOpen] = useState(false);
   const handleOpenChatBot = () => setIsChatBotOpen(true);
   const handleCloseChatBot = () => setIsChatBotOpen(false);
+
+  /* -------- Fetch countries -------- */
 
   const fetchCountries = () => {
     setLoadingCountries(true);
@@ -1774,7 +1804,8 @@ export const DemandProjectMonth = () => {
       .finally(() => setLoadingCountries(false));
   };
 
-  // COUNTRY -> STATES
+  /* -------- COUNTRY -> STATES -------- */
+
   useEffect(() => {
     if (!selectedCountry.length) {
       setFiltersData((prev) => ({
@@ -1830,7 +1861,8 @@ export const DemandProjectMonth = () => {
       .finally(() => setLoadingStates(false));
   }, [selectedCountry]);
 
-  // STATE -> PLANTS
+  /* -------- STATE -> PLANTS -------- */
+
   useEffect(() => {
     if (!selectedState.length) {
       setFiltersData((prev) => ({
@@ -1878,7 +1910,8 @@ export const DemandProjectMonth = () => {
       .finally(() => setLoadingPlants(false));
   }, [selectedState]);
 
-  /* --------- PLANTS -> SKU --------- */
+  /* -------- PLANTS -> SKUs -------- */
+
   const fetchSkus = () => {
     if (!selectedPlants.length) return;
     setLoadingSkus(true);
@@ -1910,56 +1943,37 @@ export const DemandProjectMonth = () => {
     }));
   }, [selectedPlants]);
 
-  /* --------- SKU -> SUPPLIERS (uses /suppliers-by-sku) --------- */
-  // const fetchSuppliers = async () => {
-  //   if (!selectedSKUs.length) return;
-  //   const skuId = Array.isArray(selectedSKUs) ? selectedSKUs[0] : selectedSKUs;
-  //   if (!skuId) return;
-  //   setLoadingSuppliers(true);
-  //   try {
-  //     const { data } = await axios.post(`${API_BASE_URL}/suppliers/by-sku`, {
-  //       sku_id: Number(skuId),
-  //     });
-  //     setFiltersData((prev) => ({
-  //       ...prev,
-  //       suppliers: Array.isArray(data) ? data : [],
-  //     }));
-  //   } catch (e) {
-  //     setFiltersData((prev) => ({ ...prev, suppliers: [] }));
-  //   } finally {
-  //     setLoadingSuppliers(false);
-  //   }
-  // };
+  /* -------- SKU -> SUPPLIERS (by sku) -------- */
 
-  // useEffect(() => {
-  //   setSelectedSuppliers([]);
-  //   setSelectedSupplierLocations([]);
-  //   setFiltersData((prev) => ({ ...prev, supplierLocations: [] }));
-  // }, [selectedSKUs]);
-  // replace your fetchSuppliers body with this:
-const fetchSuppliers = async () => {
-  if (!selectedSKUs.length) return;
-  const skuId = Array.isArray(selectedSKUs) ? selectedSKUs[0] : selectedSKUs;
-  if (!skuId || !Number.isFinite(Number(skuId))) return;
+  const fetchSuppliers = async () => {
+    if (!selectedSKUs.length) return;
+    const skuId = Array.isArray(selectedSKUs) ? selectedSKUs[0] : selectedSKUs;
+    if (!skuId || !Number.isFinite(Number(skuId))) return;
 
-  setLoadingSuppliers(true);
-  try {
-    const { data } = await axios.post(`${API_BASE_URL}/suppliers/by-sku`, {
-      skuId: Number(skuId),
-    });
-    setFiltersData(prev => ({
-      ...prev,
-      suppliers: Array.isArray(data) ? data : [],
-    }));
-  } catch {
-    setFiltersData(prev => ({ ...prev, suppliers: [] }));
-  } finally {
-    setLoadingSuppliers(false);
-  }
-};
+    setLoadingSuppliers(true);
+    try {
+      const { data } = await axios.post(`${API_BASE_URL}/suppliers/by-sku`, {
+        skuId: Number(skuId),
+      });
+      setFiltersData((prev) => ({
+        ...prev,
+        suppliers: Array.isArray(data) ? data : [],
+      }));
+    } catch {
+      setFiltersData((prev) => ({ ...prev, suppliers: [] }));
+    } finally {
+      setLoadingSuppliers(false);
+    }
+  };
 
+  useEffect(() => {
+    setSelectedSuppliers([]);
+    setSelectedSupplierLocations([]);
+    setFiltersData((prev) => ({ ...prev, supplierLocations: [] }));
+  }, [selectedSKUs]);
 
-  /* --------- SUPPLIERS -> SUPPLIER LOCATIONS (derived from suppliers) --------- */
+  /* -------- SUPPLIERS -> SUPPLIER LOCATIONS (local) -------- */
+
   const fetchSupplierLocations = () => {
     if (!selectedSuppliers.length) return;
 
@@ -1992,7 +2006,8 @@ const fetchSuppliers = async () => {
     setSelectedSupplierLocations([]);
   }, [selectedSuppliers]);
 
-  /* --------- Savings cards (optional fetch, not rendered directly) --------- */
+  /* -------- Savings cards (optional) -------- */
+
   useEffect(() => {
     const fmt = (num) =>
       (num < 0 ? "-$" : "$") +
@@ -2021,6 +2036,8 @@ const fetchSuppliers = async () => {
       .finally(() => setLoadingSavings(false));
   }, []);
 
+  /* -------- Clear filters -------- */
+
   const handleClearFilters = () => {
     setDateRange({
       startDate: format(subMonths(new Date("2024-12-01"), 6), "yyyy-MM-dd"),
@@ -2046,6 +2063,7 @@ const fetchSuppliers = async () => {
 
   return (
     <Box>
+      {/* Top AppBar */}
       <AppBar
         position="static"
         sx={{
@@ -2119,7 +2137,7 @@ const fetchSuppliers = async () => {
         </Toolbar>
       </AppBar>
 
-      {/* ======= Filters Row ======= */}
+      {/* Filters Row */}
       <Box
         ref={scrollRef}
         onMouseDown={handleMouseDown}
@@ -2220,7 +2238,6 @@ const fetchSuppliers = async () => {
             searchPlaceholder="Search country"
             loading={loadingCountries}
             onOpen={fetchCountries}
-            width={110}
             single
           />
 
@@ -2234,7 +2251,6 @@ const fetchSuppliers = async () => {
             searchPlaceholder="Search state"
             loading={loadingStates}
             disabled={selectedCountry.length === 0}
-            width={110}
           />
 
           <MultiSelectWithCheckboxes
@@ -2247,10 +2263,8 @@ const fetchSuppliers = async () => {
             searchPlaceholder="Search plant"
             loading={loadingPlants}
             disabled={selectedState.length === 0}
-            width={110}
           />
 
-          {/* SKU (after Plant) */}
           <MultiSelectWithCheckboxes
             label="SKU"
             options={filtersData.skus}
@@ -2262,11 +2276,9 @@ const fetchSuppliers = async () => {
             loading={loadingSkus}
             disabled={selectedPlants.length === 0}
             onOpen={fetchSkus}
-            width={130}
             single
           />
 
-          {/* Suppliers (after SKU) */}
           <MultiSelectWithCheckboxes
             label="Suppliers"
             options={filtersData.suppliers}
@@ -2278,10 +2290,8 @@ const fetchSuppliers = async () => {
             loading={loadingSuppliers}
             disabled={selectedSKUs.length === 0}
             onOpen={fetchSuppliers}
-            width={150}
           />
 
-          {/* Supplier Location (after Suppliers) */}
           <MultiSelectWithCheckboxes
             label="Supplier Location"
             options={filtersData.supplierLocations}
@@ -2293,7 +2303,6 @@ const fetchSuppliers = async () => {
             loading={loadingSupplierLocations}
             disabled={selectedSuppliers.length === 0}
             onOpen={fetchSupplierLocations}
-            width={170}
           />
 
           <Button
@@ -2349,7 +2358,7 @@ const fetchSuppliers = async () => {
         </Stack>
       </Box>
 
-      {/* ======= CONTENT: Chart/Heatmap or SAQ via tabs ======= */}
+      {/* Content */}
       <Box
         sx={{ bgcolor: "#EFF6FF", minHeight: "calc(100vh - 56px)", p: 1.25 }}
       >
