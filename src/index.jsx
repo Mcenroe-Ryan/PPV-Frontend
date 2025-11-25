@@ -4,7 +4,6 @@ import AuthPages from "./screens/Login";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import "@fontsource/poppins";
-import ChartsRow from "./screens/components/Factors"
 
 // To Override MUI default theme
 const theme = createTheme({

@@ -58,7 +58,6 @@ import HighchartsReact from "highcharts-react-official";
 import Scorecard from "./components/Scorecard";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL;
-
 /* ===================== Simple listbox for More menu ===================== */
 
 const Listbox = () => {
@@ -207,13 +206,33 @@ const numericSavings = (val) => {
   return Number.isFinite(num) ? num : 0;
 };
 
-// sort suppliers inside each country from lowest -> highest savings
+// sort suppliers inside each country:
+// - green (positive) -> highest number on top
+// - red (negative)   -> lowest number (most negative) on top
+// - positives above negatives when mixed
 const sortSuppliersBySavings = (data) =>
   data.map((c) => ({
     ...c,
-    suppliers: [...c.suppliers].sort(
-      (a, b) => numericSavings(a.savings) - numericSavings(b.savings)
-    ),
+    suppliers: [...c.suppliers].sort((a, b) => {
+      const av = numericSavings(a.savings);
+      const bv = numericSavings(b.savings);
+
+      const aPositive = av >= 0;
+      const bPositive = bv >= 0;
+
+      // both green (positive) → highest first
+      if (aPositive && bPositive) {
+        return bv - av; // desc
+      }
+
+      // both red (negative) → lowest (most negative) first
+      if (!aPositive && !bPositive) {
+        return av - bv; // asc
+      }
+
+      // mixed: keep green above red
+      return aPositive ? -1 : 1;
+    }),
   }));
 
 function SavingsBySupplier() {
@@ -885,18 +904,7 @@ const DataVisualizationSection = ({
       return;
     }
 
-    const impactColor = (impact) => {
-      switch ((impact || "").toLowerCase()) {
-        case "high":
-          return "rgba(244, 63, 94, 0.28)";
-        case "medium":
-          return "rgba(245, 158, 11, 0.22)";
-        case "low":
-          return "rgba(59, 130, 246, 0.18)";
-        default:
-          return "rgba(107,114,128,0.18)";
-      }
-    };
+    const impactColor = () => "rgba(194, 65, 12, 0.40)";
 
     const bands = [];
     const byX = {};
@@ -1193,7 +1201,7 @@ const DataVisualizationSection = ({
           if (showGlobal && pts.length) {
             const firstPoint = pts[0];
             const xIdx =
-              (typeof firstPoint.x === "number" ? firstPoint.x : null) ?? 
+              (typeof firstPoint.x === "number" ? firstPoint.x : null) ??
               lineCategories.indexOf(this.x);
             if (xIdx != null && xIdx > -1) {
               const evs = (eventsByX || {})[xIdx] || [];
@@ -1253,265 +1261,279 @@ const DataVisualizationSection = ({
   }, [options]);
 
   return (
-    <Stack spacing="15px" sx={{ width: "100%" }}>
-      <Box
-        sx={{ bgcolor: "background.paper", border: 1, borderColor: "grey.300" }}
-      >
-        <Tabs
-          value={selectedTab}
-          onChange={(_, v) => setSelectedTab(v)}
-          TabIndicatorProps={{ sx: { display: "none" } }}
+    <>
+      <style>{`
+      .highcharts-legend-item-hidden span {
+        filter: grayscale(1);
+        cursor: pointer;
+      }
+    `}</style>
+      <Stack spacing="15px" sx={{ width: "100%" }}>
+        <Box
           sx={{
-            minHeight: "auto",
-            px: 1,
-            "& .MuiTab-root": {
-              minHeight: "auto",
-              py: 0.75,
-              px: 1.75,
-              mr: 1,
-              textTransform: "none",
-              fontSize: 14,
-              fontWeight: 500,
-              color: "text.secondary",
-              "&:hover": { backgroundColor: "#EEF5FF" },
-            },
-            "& .MuiTab-root.Mui-selected": {
-              backgroundColor: "#DBEAFE",
-              color: "#1F2937",
-              fontWeight: 600,
-              boxShadow: "inset 0 -2px 0 #1E88E5",
-            },
+            bgcolor: "background.paper",
+            border: 1,
+            borderColor: "grey.300",
           }}
         >
-          <Tab label="PPV Forecast" disableRipple />
-          <Tab label="Scorecard" disableRipple />
-          <Tab label="SAQ" disableRipple />
-        </Tabs>
-      </Box>
-
-      {selectedTab === 0 && (
-        <>
-          <SavingsBySupplier />
-
-          <Box
+          <Tabs
+            value={selectedTab}
+            onChange={(_, v) => setSelectedTab(v)}
+            TabIndicatorProps={{ sx: { display: "none" } }}
             sx={{
-              position: "relative",
-              bgcolor: "background.paper",
-              border: 1,
-              borderColor: "grey.400",
-              width: "100%",
-              p: 1,
+              minHeight: "auto",
+              px: 1,
+              "& .MuiTab-root": {
+                minHeight: "auto",
+                py: 0.75,
+                px: 1.75,
+                mr: 1,
+                textTransform: "none",
+                fontSize: 14,
+                fontWeight: 500,
+                color: "text.secondary",
+                "&:hover": { backgroundColor: "#EEF5FF" },
+              },
+              "& .MuiTab-root.Mui-selected": {
+                backgroundColor: "#DBEAFE",
+                color: "#1F2937",
+                fontWeight: 600,
+                boxShadow: "inset 0 -2px 0 #1E88E5",
+              },
             }}
           >
-            <Stack
-              spacing="9px"
+            <Tab label="PPV Forecast" disableRipple />
+            <Tab label="Scorecard" disableRipple />
+            <Tab label="SAQ" disableRipple />
+          </Tabs>
+        </Box>
+
+        {selectedTab === 0 && (
+          <>
+            <SavingsBySupplier />
+
+            <Box
               sx={{
-                position: "absolute",
-                top: 8,
-                left: 8,
-                right: 8,
-                zIndex: 2,
+                position: "relative",
+                bgcolor: "background.paper",
+                border: 1,
+                borderColor: "grey.400",
+                width: "100%",
+                p: 1,
               }}
             >
               <Stack
-                direction="row"
-                spacing={1.25}
-                alignItems="center"
-                flexWrap="wrap"
+                spacing="9px"
+                sx={{
+                  position: "absolute",
+                  top: 8,
+                  left: 8,
+                  right: 8,
+                  zIndex: 2,
+                }}
               >
-                <Stack direction="row" spacing={1.25}>
-                  {["W", "M", "Q"].map((p) => (
-                    <Box
-                      key={p}
-                      sx={{
-                        width: 38,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        px: 1.25,
-                        py: 0,
-                        borderRadius: "50px",
-                        border: 1,
-                        borderColor: "primary.dark",
-                        cursor: "pointer",
-                        bgcolor:
-                          selectedPeriod === p ? "primary.main" : "transparent",
-                      }}
-                      onClick={() => setSelectedPeriod(p)}
-                    >
-                      <Typography
+                <Stack
+                  direction="row"
+                  spacing={1.25}
+                  alignItems="center"
+                  flexWrap="wrap"
+                >
+                  <Stack direction="row" spacing={1.25}>
+                    {["W", "M", "Q"].map((p) => (
+                      <Box
+                        key={p}
                         sx={{
-                          fontWeight: 600,
-                          fontSize: "12px",
-                          color:
+                          width: 38,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          px: 1.25,
+                          py: 0,
+                          borderRadius: "50px",
+                          border: 1,
+                          borderColor: "primary.dark",
+                          cursor: "pointer",
+                          bgcolor:
                             selectedPeriod === p
-                              ? "background.paper"
-                              : "text.primary",
+                              ? "primary.main"
+                              : "transparent",
                         }}
+                        onClick={() => setSelectedPeriod(p)}
                       >
-                        {p}
-                      </Typography>
-                    </Box>
-                  ))}
-                </Stack>
+                        <Typography
+                          sx={{
+                            fontWeight: 600,
+                            fontSize: "12px",
+                            color:
+                              selectedPeriod === p
+                                ? "background.paper"
+                                : "text.primary",
+                          }}
+                        >
+                          {p}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Stack>
 
-                <Stack direction="row" spacing={1.25} alignItems="center">
+                  <Stack direction="row" spacing={1.25} alignItems="center">
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={showForecast}
+                          onChange={(e) => setShowForecast(e.target.checked)}
+                        />
+                      }
+                      label="6 Months Forecast"
+                      sx={{
+                        "& .MuiFormControlLabel-label": {
+                          fontSize: "14px",
+                          color: "text.primary",
+                        },
+                      }}
+                    />
+                    <KeyboardArrowDownIcon sx={{ width: 16, height: 16 }} />
+                  </Stack>
+
                   <FormControlLabel
                     control={
                       <Checkbox
-                        checked={showForecast}
-                        onChange={(e) => setShowForecast(e.target.checked)}
+                        checked={showGlobal}
+                        onChange={handleGlobalToggle}
                       />
                     }
-                    label="6 Months Forecast"
+                    label="Global Events"
                     sx={{
                       "& .MuiFormControlLabel-label": {
                         fontSize: "14px",
-                        color: "text.primary",
+                        color: "text.secondary",
                       },
                     }}
                   />
-                  <KeyboardArrowDownIcon sx={{ width: 16, height: 16 }} />
+
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={showAlerts}
+                        onChange={handleAlertsToggle}
+                      />
+                    }
+                    label="Alerts"
+                    sx={{
+                      "& .MuiFormControlLabel-label": {
+                        fontSize: "14px",
+                        color: "text.secondary",
+                      },
+                    }}
+                  />
                 </Stack>
-
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={showGlobal}
-                      onChange={handleGlobalToggle}
-                    />
-                  }
-                  label="Global Events"
-                  sx={{
-                    "& .MuiFormControlLabel-label": {
-                      fontSize: "14px",
-                      color: "text.secondary",
-                    },
-                  }}
-                />
-
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={showAlerts}
-                      onChange={handleAlertsToggle}
-                    />
-                  }
-                  label="Alerts"
-                  sx={{
-                    "& .MuiFormControlLabel-label": {
-                      fontSize: "14px",
-                      color: "text.secondary",
-                    },
-                  }}
-                />
               </Stack>
-            </Stack>
 
-            {/* 🔹 Icons opposite to Alerts checkbox (top-right) */}
-            <Box
-              sx={{
-                position: "absolute",
-                top: 8,
-                right: 8,
-                zIndex: 3,
-                display: "flex",
-                alignItems: "center",
-                gap: 1.3,
-              }}
-            >
-              <IconButton size="small">
-                <GridViewIcon fontSize="small" />
-              </IconButton>
-              <IconButton size="small">
-                <DownloadIcon
-                  sx={{ width: 20, height: 20, color: "text.secondary" }}
-                />
-              </IconButton>
-              <IconButton size="small">
-                <ShareIcon fontSize="small" />
-              </IconButton>
-              <IconButton size="small">
-                <SettingsIcon fontSize="small" />
-              </IconButton>
+              {/* 🔹 Icons opposite to Alerts checkbox (top-right) */}
+              <Box
+                sx={{
+                  position: "absolute",
+                  top: 8,
+                  right: 8,
+                  zIndex: 3,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1.3,
+                }}
+              >
+                <IconButton size="small">
+                  <GridViewIcon fontSize="small" />
+                </IconButton>
+                <IconButton size="small">
+                  <DownloadIcon
+                    sx={{ width: 20, height: 20, color: "text.secondary" }}
+                  />
+                </IconButton>
+                <IconButton size="small">
+                  <ShareIcon fontSize="small" />
+                </IconButton>
+                <IconButton size="small">
+                  <SettingsIcon fontSize="small" />
+                </IconButton>
+              </Box>
+
+              <Box sx={{ pt: 6 }}>
+                {chartLoading ? (
+                  <Stack
+                    alignItems="center"
+                    justifyContent="center"
+                    sx={{ height: 420 }}
+                  >
+                    <CircularProgress />
+                  </Stack>
+                ) : (
+                  <HighchartsReact
+                    ref={chartRef}
+                    highcharts={Highcharts}
+                    options={options}
+                  />
+                )}
+              </Box>
             </Box>
 
-            <Box sx={{ pt: 6 }}>
-              {chartLoading ? (
-                <Stack
-                  alignItems="center"
-                  justifyContent="center"
-                  sx={{ height: 420 }}
-                >
-                  <CircularProgress />
-                </Stack>
-              ) : (
-                <HighchartsReact
-                  ref={chartRef}
-                  highcharts={Highcharts}
-                  options={options}
-                />
-              )}
-            </Box>
+            <Divider sx={{ my: 1.25 }} />
+
+            <SupplierDataTableSection
+              startDate={startDate}
+              endDate={endDate}
+              countryIds={countryIds}
+              stateIds={stateIds}
+              plantIds={plantIds}
+              skuIds={skuIds}
+              supplierIds={supplierIds}
+              supplierLocations={supplierLocations}
+            />
+          </>
+        )}
+
+        {selectedTab === 1 && (
+          <Box
+            sx={{
+              bgcolor: "background.paper",
+              border: 1,
+              borderColor: "grey.400",
+              p: 2,
+            }}
+          >
+            <Scorecard
+              startDate={startDate}
+              endDate={endDate}
+              supplierIds={supplierIds}
+              skuIds={skuIds}
+              plantIds={plantIds}
+              countryIds={countryIds}
+              stateIds={stateIds}
+            />
           </Box>
+        )}
 
-          <Divider sx={{ my: 1.25 }} />
-
-          <SupplierDataTableSection
-            startDate={startDate}
-            endDate={endDate}
-            countryIds={countryIds}
-            stateIds={stateIds}
-            plantIds={plantIds}
-            skuIds={skuIds}
-            supplierIds={supplierIds}
-            supplierLocations={supplierLocations}
-          />
-        </>
-      )}
-
-      {selectedTab === 1 && (
-        <Box
-          sx={{
-            bgcolor: "background.paper",
-            border: 1,
-            borderColor: "grey.400",
-            p: 2,
-          }}
-        >
-          <Scorecard
-            startDate={startDate}
-            endDate={endDate}
-            supplierIds={supplierIds}
-            skuIds={skuIds}
-            plantIds={plantIds}
-            countryIds={countryIds}
-            stateIds={stateIds}
-          />
-        </Box>
-      )}
-
-      {selectedTab === 2 && (
-        <Box
-          sx={{
-            bgcolor: "background.paper",
-            border: 1,
-            borderColor: "grey.400",
-            p: 1,
-          }}
-        >
-          <SAQ
-            startDate={startDate}
-            endDate={endDate}
-            supplierIds={supplierIds}
-            skuIds={skuIds}
-            plantIds={plantIds}
-            countryIds={countryIds}
-            stateIds={stateIds}
-          />
-        </Box>
-      )}
-    </Stack>
+        {selectedTab === 2 && (
+          <Box
+            sx={{
+              bgcolor: "background.paper",
+              border: 1,
+              borderColor: "grey.400",
+              p: 1,
+            }}
+          >
+            <SAQ
+              startDate={startDate}
+              endDate={endDate}
+              supplierIds={supplierIds}
+              skuIds={skuIds}
+              plantIds={plantIds}
+              countryIds={countryIds}
+              stateIds={stateIds}
+            />
+          </Box>
+        )}
+      </Stack>
+    </>
   );
 };
 
@@ -1924,11 +1946,17 @@ export const DemandProjectMonth = () => {
   const handleMoreClose = () => setMoreAnchorEl(null);
 
   const [showActivities, setShowActivities] = useState(false);
-  const handleOpenActivities = () => setShowActivities(true);
+  const handleOpenActivities = () => {
+    setShowActivities(true);
+    setIsChatBotOpen(false);
+  };
   const handleCloseActivities = () => setShowActivities(false);
 
   const [isChatBotOpen, setIsChatBotOpen] = useState(false);
-  const handleOpenChatBot = () => setIsChatBotOpen(true);
+  const handleOpenChatBot = () => {
+    setIsChatBotOpen(true);
+    setShowActivities(false);
+  };
   const handleCloseChatBot = () => setIsChatBotOpen(false);
 
   /* -------- Fetch countries -------- */

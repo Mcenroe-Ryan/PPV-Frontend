@@ -129,6 +129,26 @@ function YearLabels({ xAxisMap, yearSpans }) {
   );
 }
 
+/**
+ * Format the X-axis label so that:
+ * - First month of each year -> "Jun 2024"
+ * - Remaining months of same year -> "Jul 24", "Aug 24", ...
+ */
+const formatXAxisLabel = (d, idx, arr) => {
+  const yearFull = d.year.toString();
+  const yearShort = yearFull.slice(-2);
+  if (idx === 0) return `${d.monthShort} ${yearFull}`;
+
+  const prevYear = arr[idx - 1]?.year;
+  if (prevYear !== d.year) {
+    // first month of a new year
+    return `${d.monthShort} ${yearFull}`;
+  }
+
+  // same year as previous -> use 2-digit year
+  return `${d.monthShort} ${yearShort}`;
+};
+
 /* ==============================  MAIN COMPONENT  =========================== */
 
 export default function SAQ({
@@ -272,8 +292,8 @@ export default function SAQ({
   const chartData = useMemo(() => {
     const lastHistIdx = firstForecastIdx > 0 ? firstForecastIdx - 1 : -1;
 
-    return normalized.map((d, idx) => ({
-      xLabel: `${d.monthShort} ${d.year}`,
+    return normalized.map((d, idx, arr) => ({
+      xLabel: formatXAxisLabel(d, idx, arr),
       iso: d.iso,
       year: d.year,
 
@@ -352,7 +372,7 @@ export default function SAQ({
         <Box
           sx={{
             height: 440,
-            minWidth: Math.max(chartData.length * 70, 800),
+            minWidth: Math.max(chartData.length * 55, 800),
           }}
         >
           <ResponsiveContainer width="100%" height="100%">
@@ -602,13 +622,18 @@ export default function SAQ({
                 cursor: "pointer",
                 minWidth: 90,
                 height: 24,
-                backgroundColor: btn.active ? "#F8FBFF" : "#F8FAFC",
-                border: "1px solid #D1D5DB",
+                backgroundColor: btn.active ? "#F8FBFF" : "#F9FAFB",
+                border: btn.active
+                  ? "1px solid #D1D5DB"
+                  : "1px solid #E5E7EB",
                 boxShadow: btn.active
                   ? "0px 1px 3px rgba(0,0,0,0.06)"
-                  : "0px 1px 2px rgba(0,0,0,0.03)",
+                  : "none",
                 transition: "all 0.2s ease",
-                "&:hover": { backgroundColor: "#EEF2F7" },
+                "&:hover": {
+                  backgroundColor: btn.active ? "#EEF2FF" : "#F3F4F6",
+                },
+                opacity: btn.active ? 1 : 0.6,
               }}
             >
               <Box
@@ -616,7 +641,7 @@ export default function SAQ({
                   width: 8,
                   height: 8,
                   borderRadius: "50%",
-                  backgroundColor: btn.color,
+                  backgroundColor: btn.active ? btn.color : "#D1D5DB",
                   flexShrink: 0,
                 }}
               />
@@ -624,7 +649,7 @@ export default function SAQ({
                 variant="body2"
                 fontWeight={500}
                 sx={{
-                  color: "#374151",
+                  color: btn.active ? "#374151" : "#9CA3AF",
                   fontSize: "0.7rem",
                   lineHeight: 1.1,
                   whiteSpace: "nowrap",
@@ -766,7 +791,7 @@ export default function SAQ({
             </TableHead>
             <TableBody>
               {showStandard && (
-                <Fade in={showStandard} timeout={400}>
+                <Fade in={showStandard} timeout={600}>
                   <TableRow>
                     <TableCell sx={{ fontWeight: 600 }}>
                       Standard Price ($)
@@ -783,7 +808,7 @@ export default function SAQ({
               )}
 
               {showActual && (
-                <Fade in={showActual} timeout={400}>
+                <Fade in={showActual} timeout={600}>
                   <TableRow>
                     <TableCell sx={{ fontWeight: 600 }}>
                       Actual Price ($)
