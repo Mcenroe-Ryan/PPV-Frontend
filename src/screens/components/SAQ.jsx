@@ -13,7 +13,15 @@ import {
   TableBody,
   TableContainer,
   Fade,
+  IconButton,
+  Dialog,
 } from "@mui/material";
+import FullscreenIcon from "@mui/icons-material/Fullscreen";
+import FullscreenExitIcon from "@mui/icons-material/FullscreenExit";
+import GridViewIcon from "@mui/icons-material/GridView";
+import DownloadIcon from "@mui/icons-material/Download";
+import ShareIcon from "@mui/icons-material/Share";
+import SettingsIcon from "@mui/icons-material/Settings";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -27,8 +35,10 @@ import {
   Customized,
 } from "recharts";
 
-/* ==========================  COLORS & CONSTANTS  =========================== */
-const API_BASE_URL = "http://localhost:5002/api";
+/* ==========================  CONFIG & CONSTANTS  =========================== */
+
+const API_BASE_URL = import.meta.env.VITE_API_URL;
+
 const COLOR_STANDARD = "#DB2777";
 const COLOR_ACTUAL = "#EA580C";
 const COLOR_QUANTITY = "#7EC8F0";
@@ -42,14 +52,33 @@ const COLOR_TABLE_HEAD_BG = "#F8FAFC";
 const COLOR_TABLE_SUBHEAD_BG = "#F1F5F9";
 const FONT_MONO = "'Poppins', sans-serif";
 
+/**
+ * Default SAQ filter values when parent doesn't pass anything
+ * or passes empty arrays.
+ */
+const DEFAULT_SAQ_FILTERS = {
+  startDate: "2024-05-30",
+  endDate: "2026-06-30",
+  skuIds: [8],
+  countryIds: [12],
+  stateIds: [27],
+  plantIds: [15],
+  supplierIds: [7],
+};
+
 /* ==============================  HELPERS  ================================== */
+
 const num = (v) => (Number.isFinite(+v) ? +v : 0);
+
 const compareDateOnly = (a, b) =>
   new Date(a).setHours(0, 0, 0, 0) - new Date(b).setHours(0, 0, 0, 0);
+
 const today = new Date();
 const isHistorical = (iso) => new Date(iso) < today;
+
 const monthShort = (iso) =>
   new Date(iso).toLocaleString("en-US", { month: "short" });
+
 const yearNum = (iso) => new Date(iso).getFullYear();
 
 function ForecastBarShape({ x, y, width, height, fill }) {
@@ -101,10 +130,11 @@ function YearLabels({ xAxisMap, yearSpans }) {
 }
 
 /* ==============================  MAIN COMPONENT  =========================== */
+
 export default function SAQ({
   startDate,
   endDate,
-  supplierIds, // number | string | (number[] | string[])
+  supplierIds,
   skuIds,
   plantIds,
   countryIds,
@@ -118,41 +148,72 @@ export default function SAQ({
   const [showActual, setShowActual] = useState(true);
   const [showQuantity, setShowQuantity] = useState(true);
 
+  const [fullscreen, setFullscreen] = useState(false);
+
+  /* =======================  EFFECTIVE FILTERS (WITH DEFAULTS)  ======================= */
+
+  const effectiveFilters = useMemo(() => {
+    const safeArrayOrDefault = (value, defaultArr) => {
+      if (Array.isArray(value) && value.length > 0) return value;
+      return defaultArr;
+    };
+
+    return {
+      startDate: startDate || DEFAULT_SAQ_FILTERS.startDate,
+      endDate: endDate || DEFAULT_SAQ_FILTERS.endDate,
+      supplierIds: safeArrayOrDefault(
+        supplierIds,
+        DEFAULT_SAQ_FILTERS.supplierIds
+      ),
+      skuIds: safeArrayOrDefault(skuIds, DEFAULT_SAQ_FILTERS.skuIds),
+      countryIds: safeArrayOrDefault(
+        countryIds,
+        DEFAULT_SAQ_FILTERS.countryIds
+      ),
+      stateIds: safeArrayOrDefault(stateIds, DEFAULT_SAQ_FILTERS.stateIds),
+      plantIds: safeArrayOrDefault(plantIds, DEFAULT_SAQ_FILTERS.plantIds),
+    };
+  }, [startDate, endDate, supplierIds, skuIds, plantIds, countryIds, stateIds]);
+
   /* ============================  FETCH DATA  =============================== */
+
   useEffect(() => {
-    if (!startDate || !endDate) return;
+    const {
+      startDate: effStart,
+      endDate: effEnd,
+      supplierIds: effSupplierIds,
+      countryIds: effCountryIds,
+      stateIds: effStateIds,
+      plantIds: effPlantIds,
+      skuIds: effSkuIds,
+    } = effectiveFilters;
 
-    // --- Normalize to a SINGLE numeric supplier_id ---
-    let supplierId;
+    if (!effStart || !effEnd) return;
 
-    if (Array.isArray(supplierIds) && supplierIds.length > 0) {
-      supplierId = Number(supplierIds[0]);
-    } else if (supplierIds !== null && supplierIds !== undefined) {
-      supplierId = Number(supplierIds);
+    // Normalize to a single numeric supplier_id
+    let supplierId = null;
+
+    if (Array.isArray(effSupplierIds) && effSupplierIds.length > 0) {
+      supplierId = Number(effSupplierIds[0]);
+    } else if (effSupplierIds !== null && effSupplierIds !== undefined) {
+      supplierId = Number(effSupplierIds);
     }
 
-    // Fallback: if nothing valid selected, either default or stop.
-    if (!Number.isFinite(supplierId)) {
-      // If you want no data until a supplier is selected, use:
-      // setRows([]);
-      // setLoading(false);
-      // return;
-
-      // Using 7 as default as per your service code:
-      supplierId = 7;
+    if (!Number.isFinite(supplierId) || supplierId <= 0) {
+      supplierId = DEFAULT_SAQ_FILTERS.supplierIds[0]; // safety net
     }
 
     const fetchData = async () => {
       setLoading(true);
       try {
         const payload = {
-          supplier_id: supplierId, // ✅ always number
-          start_date: startDate,
-          end_date: endDate,
-          country_ids: Array.isArray(countryIds) ? countryIds : [],
-          state_ids: Array.isArray(stateIds) ? stateIds : [],
-          plant_ids: Array.isArray(plantIds) ? plantIds : [],
-          sku_ids: Array.isArray(skuIds) ? skuIds : [],
+          supplier_id: supplierId,
+          start_date: effStart,
+          end_date: effEnd,
+          country_ids: effCountryIds,
+          state_ids: effStateIds,
+          plant_ids: effPlantIds,
+          sku_ids: effSkuIds,
         };
 
         console.log("📤 SAQ payload:", payload);
@@ -179,9 +240,10 @@ export default function SAQ({
     };
 
     fetchData();
-  }, [supplierIds, startDate, endDate, countryIds, stateIds, plantIds, skuIds]);
+  }, [effectiveFilters]);
 
   /* ===========================  PROCESS DATA  ============================== */
+
   const normalized = useMemo(
     () =>
       [...rows]
@@ -199,20 +261,31 @@ export default function SAQ({
   );
 
   const firstForecastIdx = useMemo(
-    () => Math.max(0, normalized.findIndex((d) => !d.isHist)),
+    () =>
+      Math.max(
+        0,
+        normalized.findIndex((d) => !d.isHist)
+      ),
     [normalized]
   );
 
   const chartData = useMemo(() => {
     const lastHistIdx = firstForecastIdx > 0 ? firstForecastIdx - 1 : -1;
+
     return normalized.map((d, idx) => ({
       xLabel: `${d.monthShort} ${d.year}`,
       iso: d.iso,
       year: d.year,
+
+      // Quantity
       quantity_hist: d.isHist ? d.qty : null,
       quantity_fore: !d.isHist ? d.qty : null,
+
+      // Standard Price
       standard_hist: d.isHist ? d.std : null,
       standard_fore: !d.isHist || idx === lastHistIdx ? d.std : null,
+
+      // Actual Price
       actual_hist: d.isHist ? d.act : null,
       actual_fore: !d.isHist || idx === lastHistIdx ? d.act : null,
     }));
@@ -253,10 +326,203 @@ export default function SAQ({
     }));
   }, [normalized]);
 
+  /* ==============================  CHART RENDER HELPER  ==================== */
+
+  const renderChartContent = () => {
+    if (loading) {
+      return (
+        <Box sx={{ py: 10, display: "flex", justifyContent: "center" }}>
+          <CircularProgress />
+        </Box>
+      );
+    }
+
+    if (rows.length === 0) {
+      return (
+        <Box sx={{ py: 4, textAlign: "center" }}>
+          <Typography variant="body2" color="text.secondary">
+            No SAQ data for the selected filters.
+          </Typography>
+        </Box>
+      );
+    }
+
+    return (
+      <Box sx={{ overflowX: "auto" }}>
+        <Box
+          sx={{
+            height: 440,
+            minWidth: Math.max(chartData.length * 70, 800),
+          }}
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart
+              data={chartData}
+              margin={{ top: 10, right: 40, bottom: 40, left: 8 }}
+              barCategoryGap="10%"
+            >
+              <CartesianGrid stroke={COLOR_GRID} vertical={false} />
+
+              <XAxis
+                dataKey="xLabel"
+                tickMargin={8}
+                tick={{ fontSize: 12, fill: COLOR_TEXT }}
+                axisLine={{ stroke: COLOR_AXIS }}
+                tickLine={{ stroke: COLOR_GRID }}
+                interval={0}
+                padding={{ left: 0, right: 0 }}
+              />
+
+              <YAxis
+                yAxisId="left"
+                tick={{ fontSize: 12, fill: COLOR_TEXT }}
+                axisLine={{ stroke: COLOR_AXIS }}
+                tickLine={{ stroke: COLOR_GRID }}
+                label={{
+                  value: "Standard & Actual Price ($)",
+                  angle: -90,
+                  position: "insideLeft",
+                  offset: 10,
+                  dy: 40,
+                  dx: -4,
+                  style: {
+                    fontSize: 13,
+                    fill: COLOR_AXIS,
+                    fontFamily: FONT_MONO,
+                    fontWeight: 500,
+                  },
+                }}
+              />
+
+              {showQuantity && (
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  tick={{ fontSize: 12, fill: COLOR_TEXT }}
+                  axisLine={{ stroke: COLOR_AXIS, strokeWidth: 1 }}
+                  tickLine={{ stroke: COLOR_GRID }}
+                  label={{
+                    value: "Quantity",
+                    angle: 90,
+                    position: "insideRight",
+                    style: {
+                      fontSize: 13,
+                      fill: COLOR_AXIS,
+                      fontFamily: FONT_MONO,
+                      fontWeight: 500,
+                    },
+                  }}
+                />
+              )}
+
+              {janIndexes.map((x) => (
+                <ReferenceLine
+                  key={x}
+                  x={x}
+                  stroke={COLOR_DIVIDER}
+                  strokeWidth={1.5}
+                  ifOverflow="extendDomain"
+                />
+              ))}
+
+              <Customized component={<YearLabels yearSpans={yearSpans} />} />
+
+              {showQuantity && (
+                <>
+                  <Bar
+                    yAxisId="right"
+                    dataKey="quantity_hist"
+                    name="Quantity"
+                    fill={COLOR_QUANTITY}
+                    barSize={18}
+                    radius={[6, 6, 0, 0]}
+                    stackId="qty"
+                  />
+                  <Bar
+                    yAxisId="right"
+                    dataKey="quantity_fore"
+                    name="Quantity"
+                    fill={COLOR_QUANTITY}
+                    barSize={18}
+                    shape={<ForecastBarShape />}
+                    stackId="qty"
+                  />
+                </>
+              )}
+
+              {showStandard && (
+                <>
+                  <Line
+                    yAxisId="left"
+                    type="linear"
+                    dataKey="standard_hist"
+                    name="Standard Price"
+                    stroke={COLOR_STANDARD}
+                    strokeWidth={2}
+                    dot={{ r: 2 }}
+                    connectNulls
+                  />
+                  <Line
+                    yAxisId="left"
+                    type="linear"
+                    dataKey="standard_fore"
+                    name="Standard Price"
+                    stroke={COLOR_STANDARD}
+                    strokeWidth={2}
+                    strokeDasharray="4 4"
+                    dot={{ r: 2 }}
+                    connectNulls
+                  />
+                </>
+              )}
+
+              {showActual && (
+                <>
+                  <Line
+                    yAxisId="left"
+                    type="linear"
+                    dataKey="actual_hist"
+                    name="Actual Price"
+                    stroke={COLOR_ACTUAL}
+                    strokeWidth={2}
+                    dot={{ r: 2 }}
+                    connectNulls
+                  />
+                  <Line
+                    yAxisId="left"
+                    type="linear"
+                    dataKey="actual_fore"
+                    name="Actual Price"
+                    stroke={COLOR_ACTUAL}
+                    strokeWidth={2}
+                    strokeDasharray="4 4"
+                    dot={{ r: 2 }}
+                    connectNulls
+                  />
+                </>
+              )}
+
+              <Tooltip
+                cursor={{ stroke: "#E2E8F0", strokeWidth: 1 }}
+                contentStyle={{
+                  borderRadius: 8,
+                  border: `1px solid ${COLOR_CARD_BORDER}`,
+                  backgroundColor: "#F8FAFC",
+                  fontSize: "0.8rem",
+                }}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </Box>
+      </Box>
+    );
+  };
+
   /* ==============================  UI  ===================================== */
+
   return (
     <Box sx={{ pt: 1.3, px: 2, pb: 2, fontFamily: FONT_MONO }}>
-      {/* Top Granularity Pills */}
+      {/* Granularity Pills */}
       <Grid container alignItems="center" spacing={2} sx={{ mb: 1 }}>
         {["W", "M", "Q"].map((label) => (
           <Grid item key={label}>
@@ -283,247 +549,165 @@ export default function SAQ({
         ))}
       </Grid>
 
-      {/* Metric Toggles */}
+      {/* Metric Toggles + Top-right Icons */}
       <Box
         sx={{
           mt: 1,
           mb: 1.5,
           display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
           gap: 2,
           flexWrap: "wrap",
         }}
       >
-        {[
-          {
-            label: "Standard Price ($)",
-            color: COLOR_STANDARD,
-            active: showStandard,
-            toggle: () => setShowStandard((p) => !p),
-          },
-          {
-            label: "Actual Price ($)",
-            color: COLOR_ACTUAL,
-            active: showActual,
-            toggle: () => setShowActual((p) => !p),
-          },
-          {
-            label: "Quantity",
-            color: COLOR_QUANTITY,
-            active: showQuantity,
-            toggle: () => setShowQuantity((p) => !p),
-          },
-        ].map((btn) => (
-          <Box
-            key={btn.label}
-            onClick={btn.toggle}
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 1,
-              px: 1.8,
-              py: 0.8,
-              borderRadius: "8px",
-              cursor: "pointer",
-              backgroundColor: btn.active ? "#F8FBFF" : "#F8FAFC",
-              border: "1.5px solid #D1D5DB",
-              boxShadow: btn.active
-                ? "0px 2px 5px rgba(0,0,0,0.05)"
-                : "0px 1px 3px rgba(0,0,0,0.03)",
-              transition: "all 0.25s ease",
-              "&:hover": { backgroundColor: "#F1F5F9" },
-            }}
-          >
+        {/* Legend-like metric toggles (left) */}
+        <Box
+          sx={{
+            display: "flex",
+            gap: 2,
+            flexWrap: "wrap",
+          }}
+        >
+          {[
+            {
+              label: "Standard Price ($)",
+              color: COLOR_STANDARD,
+              active: showStandard,
+              toggle: () => setShowStandard((p) => !p),
+            },
+            {
+              label: "Actual Price ($)",
+              color: COLOR_ACTUAL,
+              active: showActual,
+              toggle: () => setShowActual((p) => !p),
+            },
+            {
+              label: "Quantity",
+              color: COLOR_QUANTITY,
+              active: showQuantity,
+              toggle: () => setShowQuantity((p) => !p),
+            },
+          ].map((btn) => (
             <Box
+              key={btn.label}
+              onClick={btn.toggle}
               sx={{
-                width: 10,
-                height: 10,
-                borderRadius: "50%",
-                backgroundColor: btn.color,
+                display: "flex",
+                alignItems: "center",
+                gap: 0.6,
+                px: 1,
+                py: 0.4,
+                borderRadius: "5px",
+                cursor: "pointer",
+                minWidth: 90,
+                height: 24,
+                backgroundColor: btn.active ? "#F8FBFF" : "#F8FAFC",
+                border: "1px solid #D1D5DB",
+                boxShadow: btn.active
+                  ? "0px 1px 3px rgba(0,0,0,0.06)"
+                  : "0px 1px 2px rgba(0,0,0,0.03)",
+                transition: "all 0.2s ease",
+                "&:hover": { backgroundColor: "#EEF2F7" },
+              }}
+            >
+              <Box
+                sx={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  backgroundColor: btn.color,
+                  flexShrink: 0,
+                }}
+              />
+              <Typography
+                variant="body2"
+                fontWeight={500}
+                sx={{
+                  color: "#374151",
+                  fontSize: "0.7rem",
+                  lineHeight: 1.1,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {btn.label}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+
+        {/* Icons on the right (same style as your Highcharts toolbar) */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1.3,
+          }}
+        >
+          <IconButton size="small">
+            <GridViewIcon fontSize="small" />
+          </IconButton>
+          <IconButton size="small">
+            <DownloadIcon
+              sx={{
+                width: 20,
+                height: 20,
+                color: "text.secondary",
               }}
             />
-            <Typography
-              variant="body2"
-              fontWeight={600}
-              sx={{ color: "#374151", fontSize: "0.9rem" }}
-            >
-              {btn.label}
-            </Typography>
-          </Box>
-        ))}
+          </IconButton>
+          <IconButton size="small">
+            <ShareIcon fontSize="small" />
+          </IconButton>
+          <IconButton size="small">
+            <SettingsIcon fontSize="small" />
+          </IconButton>
+        </Box>
       </Box>
 
       {/* Chart */}
       <Paper variant="outlined" sx={{ mt: 2, p: 2, borderRadius: 2 }}>
-        {loading ? (
-          <Box sx={{ py: 10, display: "flex", justifyContent: "center" }}>
-            <CircularProgress />
-          </Box>
-        ) : rows.length === 0 ? (
-          <Box sx={{ py: 4, textAlign: "center" }}>
-            <Typography variant="body2" color="text.secondary">
-              No SAQ data for the selected filters.
-            </Typography>
-          </Box>
-        ) : (
-          <Box sx={{ overflowX: "auto" }}>
-            <Box
-              sx={{
-                height: 440,
-                minWidth: Math.max(chartData.length * 80, 1200),
-              }}
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart
-                  data={chartData}
-                  margin={{ top: 10, right: 40, bottom: 40, left: 8 }}
-                >
-                  <CartesianGrid stroke={COLOR_GRID} vertical={false} />
-
-                  <XAxis
-                    dataKey="xLabel"
-                    tickMargin={8}
-                    tick={{ fontSize: 12, fill: COLOR_TEXT }}
-                    axisLine={{ stroke: COLOR_AXIS }}
-                    tickLine={{ stroke: COLOR_GRID }}
-                    interval={0}
-                  />
-
-                  <YAxis
-                    yAxisId="left"
-                    tick={{ fontSize: 12, fill: COLOR_TEXT }}
-                    axisLine={{ stroke: COLOR_AXIS }}
-                    tickLine={{ stroke: COLOR_GRID }}
-                    label={{
-                      value: "Standard & Actual Price ($)",
-                      angle: -90,
-                      position: "insideLeft",
-                      offset: 10,
-                      dy: 40,
-                      dx: -4,
-                      style: {
-                        fontSize: 13,
-                        fill: COLOR_AXIS,
-                        fontFamily: FONT_MONO,
-                        fontWeight: 500,
-                      },
-                    }}
-                  />
-
-                  {showQuantity && (
-                    <YAxis
-                      yAxisId="right"
-                      orientation="right"
-                      tick={{ fontSize: 12, fill: COLOR_TEXT }}
-                      axisLine={{ stroke: COLOR_AXIS, strokeWidth: 1 }}
-                      tickLine={{ stroke: COLOR_GRID }}
-                      label={{
-                        value: "Quantity",
-                        angle: 90,
-                        position: "insideRight",
-                        style: {
-                          fontSize: 13,
-                          fill: COLOR_AXIS,
-                          fontFamily: FONT_MONO,
-                          fontWeight: 500,
-                        },
-                      }}
-                    />
-                  )}
-
-                  {janIndexes.map((x) => (
-                    <ReferenceLine
-                      key={x}
-                      x={x}
-                      stroke={COLOR_DIVIDER}
-                      strokeWidth={1.5}
-                      ifOverflow="extendDomain"
-                    />
-                  ))}
-
-                  <Customized component={<YearLabels yearSpans={yearSpans} />} />
-
-                  {showQuantity && (
-                    <>
-                      <Bar
-                        yAxisId="right"
-                        dataKey="quantity_hist"
-                        fill={COLOR_QUANTITY}
-                        barSize={18}
-                        radius={[6, 6, 0, 0]}
-                      />
-                      <Bar
-                        yAxisId="right"
-                        dataKey="quantity_fore"
-                        fill={COLOR_QUANTITY}
-                        barSize={18}
-                        shape={<ForecastBarShape />}
-                      />
-                    </>
-                  )}
-
-                  {showStandard && (
-                    <>
-                      <Line
-                        yAxisId="left"
-                        type="linear"
-                        dataKey="standard_hist"
-                        stroke={COLOR_STANDARD}
-                        strokeWidth={2}
-                        dot={{ r: 2 }}
-                        connectNulls
-                      />
-                      <Line
-                        yAxisId="left"
-                        type="linear"
-                        dataKey="standard_fore"
-                        stroke={COLOR_STANDARD}
-                        strokeWidth={2}
-                        strokeDasharray="4 4"
-                        dot={{ r: 2 }}
-                        connectNulls
-                      />
-                    </>
-                  )}
-
-                  {showActual && (
-                    <>
-                      <Line
-                        yAxisId="left"
-                        type="linear"
-                        dataKey="actual_hist"
-                        stroke={COLOR_ACTUAL}
-                        strokeWidth={2}
-                        dot={{ r: 2 }}
-                        connectNulls
-                      />
-                      <Line
-                        yAxisId="left"
-                        type="linear"
-                        dataKey="actual_fore"
-                        stroke={COLOR_ACTUAL}
-                        strokeWidth={2}
-                        strokeDasharray="4 4"
-                        dot={{ r: 2 }}
-                        connectNulls
-                      />
-                    </>
-                  )}
-
-                  <Tooltip
-                    cursor={{ stroke: "#E2E8F0", strokeWidth: 1 }}
-                    contentStyle={{
-                      borderRadius: 8,
-                      border: `1px solid ${COLOR_CARD_BORDER}`,
-                      backgroundColor: "#F8FAFC",
-                      fontSize: "0.8rem",
-                    }}
-                  />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </Box>
-          </Box>
-        )}
+        <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>
+          <IconButton
+            size="small"
+            onClick={() => setFullscreen(true)}
+            aria-label="Fullscreen chart"
+          >
+            <FullscreenIcon fontSize="small" />
+          </IconButton>
+        </Box>
+        {renderChartContent()}
       </Paper>
+
+      {/* Fullscreen dialog */}
+      <Dialog fullScreen open={fullscreen} onClose={() => setFullscreen(false)}>
+        <Box
+          sx={{
+            p: 2,
+            height: "100vh",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              mb: 2,
+            }}
+          >
+            <Typography variant="h6">SAQ Chart</Typography>
+            <IconButton
+              onClick={() => setFullscreen(false)}
+              aria-label="Exit fullscreen"
+            >
+              <FullscreenExitIcon />
+            </IconButton>
+          </Box>
+          <Box sx={{ flex: 1, minHeight: 0 }}>{renderChartContent()}</Box>
+        </Box>
+      </Dialog>
 
       {/* Table */}
       <Paper variant="outlined" sx={{ mt: 3, borderRadius: 2 }}>

@@ -29,8 +29,6 @@ import {
   CircularProgress,
   Dialog,
   Slide,
-  Card,
-  CardContent,
   FormControlLabel,
   Tabs,
   Tab,
@@ -44,10 +42,15 @@ import {
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import CheckBoxIcon from "@mui/icons-material/CheckBox";
 import CheckBoxOutlineBlankIcon from "@mui/icons-material/CheckBoxOutlineBlank";
+import GridViewIcon from "@mui/icons-material/GridView";
+import DownloadIcon from "@mui/icons-material/Download";
+import ShareIcon from "@mui/icons-material/Share";
+import SettingsIcon from "@mui/icons-material/Settings";
 import { format, addMonths, subMonths, parse } from "date-fns";
 import DateFilter from "./components/DateFilter";
 import ChatBot from "./components/Chatbox";
 import SAQ from "./components/SAQ";
+import Chart from "./components/Messaging";
 
 // Highcharts
 import Highcharts from "highcharts";
@@ -55,7 +58,6 @@ import HighchartsReact from "highcharts-react-official";
 import Scorecard from "./components/Scorecard";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL;
-// const API_BASE_URL = "http://localhost:5002/api";
 
 /* ===================== Simple listbox for More menu ===================== */
 
@@ -198,8 +200,26 @@ const SAVINGS_SUPPLIER_DATA = [
   },
 ];
 
+// helper to extract numeric value from "$3216.34" / "-$18.46"
+const numericSavings = (val) => {
+  if (typeof val === "number") return val;
+  const num = parseFloat(String(val).replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(num) ? num : 0;
+};
+
+// sort suppliers inside each country from lowest -> highest savings
+const sortSuppliersBySavings = (data) =>
+  data.map((c) => ({
+    ...c,
+    suppliers: [...c.suppliers].sort(
+      (a, b) => numericSavings(a.savings) - numericSavings(b.savings)
+    ),
+  }));
+
 function SavingsBySupplier() {
-  const [suppliers, setSuppliers] = useState(SAVINGS_SUPPLIER_DATA);
+  const [suppliers, setSuppliers] = useState(() =>
+    sortSuppliersBySavings(SAVINGS_SUPPLIER_DATA)
+  );
 
   const handleCheckboxChange = (countryIndex, supplierIndex) => {
     setSuppliers((prev) => {
@@ -348,7 +368,7 @@ function MultiSelectWithCheckboxes({
   displayKey,
   selected,
   setSelected,
-  width, // optional: used as minWidth
+  width,
   searchPlaceholder = "",
   loading = false,
   disabled = false,
@@ -382,7 +402,7 @@ function MultiSelectWithCheckboxes({
 
   useEffect(() => {
     if (anchorEl && searchInputRef.current) {
-      setTimeout(() => searchInputRef.current.focus(), 100);
+      setTimeout(() => searchInputRef.current?.focus(), 100);
     }
   }, [anchorEl]);
 
@@ -441,7 +461,6 @@ function MultiSelectWithCheckboxes({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          "& .MuiButton-endIcon": { m: 0 },
         }}
         endIcon={
           !single && selected.length > 0 ? (
@@ -593,7 +612,7 @@ const DataVisualizationSection = ({
     return out;
   };
 
-  /* -------- Base line chart -------- */
+  /* -------- Base line chart: actual before today, dotted after -------- */
 
   useEffect(() => {
     if (!startDate || !endDate) return;
@@ -623,12 +642,21 @@ const DataVisualizationSection = ({
 
         const rows = Array.isArray(data) ? data : [];
 
+        // Build month buckets
         const from = firstOfMonth(new Date(startDate));
         const to = firstOfMonth(new Date(endDate));
         const months = buildMonthlyRange(from, to);
         const categories = months.map((d) => format(d, "MMM yyyy"));
         setLineCategories(categories);
 
+        // Pivot month logic
+        const today = new Date();
+        const todayMonth = firstOfMonth(today);
+
+        let pivotIdx = months.findIndex((d) => d >= todayMonth);
+        if (pivotIdx === -1) pivotIdx = months.length;
+
+        // Group values by supplier as a single series
         const bySupplier = new Map();
 
         for (const r of rows) {
@@ -642,19 +670,13 @@ const DataVisualizationSection = ({
           if (idx === -1) continue;
 
           const value = Number(r.ppv_variance_percentage);
-          const type = (r.forecast_type || "actual").toLowerCase();
+          if (!Number.isFinite(value)) continue;
 
           if (!bySupplier.has(supplier)) {
-            bySupplier.set(supplier, {
-              actual: Array(months.length).fill(null),
-              forecast: Array(months.length).fill(null),
-            });
+            bySupplier.set(supplier, Array(months.length).fill(null));
           }
-          const bucket = bySupplier.get(supplier);
-
-          if (type === "forecast")
-            bucket.forecast[idx] = isFinite(value) ? value : null;
-          else bucket.actual[idx] = isFinite(value) ? value : null;
+          const arr = bySupplier.get(supplier);
+          arr[idx] = value;
         }
 
         const colorBy = {
@@ -665,51 +687,63 @@ const DataVisualizationSection = ({
         };
 
         const seriesOut = [];
-        for (const [name, { actual, forecast }] of bySupplier.entries()) {
-          let lastActualIdx = -1;
-          for (let i = actual.length - 1; i >= 0; i--) {
-            if (typeof actual[i] === "number") {
-              lastActualIdx = i;
-              break;
+
+        for (const [name, values] of bySupplier.entries()) {
+          const color = colorBy[name] || undefined;
+
+          if (showForecast) {
+            const actualData = values.map((v, i) => (i <= pivotIdx ? v : null));
+            const forecastData = values.map((v, i) =>
+              i >= pivotIdx ? v : null
+            );
+
+            if (actualData.some((v) => typeof v === "number")) {
+              seriesOut.push({
+                name,
+                type: "line",
+                data: actualData,
+                color,
+                marker: { enabled: true, radius: 3 },
+                lineWidth: 2,
+                tooltip: { valueSuffix: "%" },
+                zIndex: 2,
+              });
             }
-          }
 
-          const forecastTrimmed = forecast.map((v, i) =>
-            i <= lastActualIdx ? null : v
-          );
-
-          seriesOut.push({
-            name,
-            type: "line",
-            data: actual,
-            color: colorBy[name],
-            marker: { enabled: true, radius: 3 },
-            lineWidth: 2,
-            tooltip: { valueSuffix: "%" },
-            zIndex: 2,
-          });
-
-          if (
-            showForecast &&
-            forecastTrimmed.some((v) => typeof v === "number")
-          ) {
-            seriesOut.push({
-              name: `${name} (Forecast)`,
-              type: "line",
-              data: forecastTrimmed,
-              color: colorBy[name],
-              dashStyle: "ShortDash",
-              marker: { enabled: true, radius: 3 },
-              lineWidth: 2,
-              tooltip: { valueSuffix: "%" },
-              zIndex: 1,
-            });
+            if (forecastData.some((v) => typeof v === "number")) {
+              seriesOut.push({
+                name: `${name} (Forecast)`,
+                type: "line",
+                data: forecastData,
+                color,
+                dashStyle: "ShortDash",
+                marker: { enabled: true, radius: 3 },
+                lineWidth: 2,
+                tooltip: { valueSuffix: "%" },
+                zIndex: 1,
+              });
+            }
+          } else {
+            // No forecast split: simple solid series
+            if (values.some((v) => typeof v === "number")) {
+              seriesOut.push({
+                name,
+                type: "line",
+                data: values,
+                color,
+                marker: { enabled: true, radius: 3 },
+                lineWidth: 2,
+                tooltip: { valueSuffix: "%" },
+                zIndex: 2,
+              });
+            }
           }
         }
 
         setLineSeries(seriesOut);
       } catch (e) {
         if (axios.isCancel?.(e)) return;
+        console.error("Error loading chart", e);
         setLineCategories([]);
         setLineSeries([]);
       } finally {
@@ -763,10 +797,10 @@ const DataVisualizationSection = ({
       }
     };
 
-    const seriesBySupplier = new Map(
+    const baseSeriesMap = new Map(
       lineSeries
-        .filter((s) => s.type === "line")
-        .map((s) => [s.name.replace(" (Forecast)", ""), s])
+        .filter((s) => s.type === "line" && !s.name.endsWith(" (Forecast)"))
+        .map((s) => [s.name, s])
     );
 
     const points = [];
@@ -776,16 +810,10 @@ const DataVisualizationSection = ({
       const xIndex = lineCategories.indexOf(cat);
       if (xIndex === -1) continue;
 
-      const supplierSeries = seriesBySupplier.get(a.supplier_name);
+      const supplierSeries = baseSeriesMap.get(a.supplier_name);
       if (!supplierSeries) continue;
 
-      let yVal = supplierSeries.data?.[xIndex];
-      if ((yVal == null || Number.isNaN(yVal)) && showForecast) {
-        const forecastSeries = lineSeries.find(
-          (s) => s.type === "line" && s.name === `${a.supplier_name} (Forecast)`
-        );
-        if (forecastSeries) yVal = forecastSeries.data?.[xIndex];
-      }
+      const yVal = supplierSeries.data?.[xIndex];
       if (yVal == null || Number.isNaN(yVal)) continue;
 
       points.push({
@@ -824,7 +852,7 @@ const DataVisualizationSection = ({
           ]
         : []
     );
-  }, [showAlerts, alertsRaw, lineCategories, lineSeries, showForecast]);
+  }, [showAlerts, alertsRaw, lineCategories, lineSeries]);
 
   const combinedSeries = useMemo(
     () => (showAlerts ? [...lineSeries, ...alertSeries] : lineSeries),
@@ -889,7 +917,7 @@ const DataVisualizationSection = ({
       });
 
       if (!byX[xIdx]) byX[xIdx] = [];
-      (byX[xIdx] || []).push(ev);
+      byX[xIdx].push(ev);
     });
 
     setXPlotBands(bands);
@@ -971,7 +999,6 @@ const DataVisualizationSection = ({
   const options = useMemo(() => {
     const { min, max, span } = computeYBounds(combinedSeries);
     const dynamicHeight = computeChartHeight(combinedSeries);
-
     const tickAmount = span <= 8 ? 5 : span <= 20 ? 7 : span <= 40 ? 9 : 11;
 
     return {
@@ -1030,24 +1057,91 @@ const DataVisualizationSection = ({
             color: "rgba(0,0,0,0.3)",
             width: 2,
             zIndex: 5,
-            dashStyle: "Solid",
           },
         ],
       },
+
       legend: {
         align: "left",
         verticalAlign: "top",
         layout: "horizontal",
-        itemStyle: {
-          color: "rgba(0,0,0,0.75)",
-          fontWeight: "500",
-          fontSize: "12px",
+        floating: false,
+        padding: 0,
+        margin: 14,
+        useHTML: true,
+        symbolWidth: 0,
+        symbolHeight: 0,
+        itemDistance: 8,
+        itemMarginTop: 0,
+        itemMarginBottom: 0,
+        labelFormatter: function () {
+          const color = this.color || "#4b5563";
+          const name = this.name || "";
+
+          // Forecast detection: only these get the dashed line
+          const isForecast =
+            (this.options &&
+              this.options.dashStyle &&
+              this.options.dashStyle !== "Solid") ||
+            name.endsWith(" (Forecast)");
+
+          // Indicator HTML:
+          //  - normal series: round dot
+          //  - forecast series: small dashed line
+          const indicator = isForecast
+            ? `
+        <span
+          style="
+            display:inline-block;
+            width:24px;
+            height:0;
+            border-top:2px dashed ${color};
+            margin-right:6px;
+            margin-top:2px;
+            flex-shrink:0;
+          "
+        ></span>
+      `
+            : `
+        <span
+          style="
+            width:12px;
+            height:12px;
+            border-radius:999px;
+            background:${color};
+            display:inline-block;
+            flex-shrink:0;
+            margin-right:6px;
+          "
+        ></span>
+      `;
+
+          return `
+      <span
+        style="
+          display:inline-flex;
+          align-items:center;
+          padding:6px 12px;
+          border-radius:4px;
+          border:1px solid #d1d5db;
+          background:#f9fafb;
+          font-size:12px;
+          font-weight:500;
+          color:#374151;
+          line-height:1;
+          white-space:nowrap;
+        "
+      >
+        ${indicator}
+        <span>${name}</span>
+      </span>
+    `;
         },
-        symbolRadius: 0,
-        symbolWidth: 16,
-        symbolHeight: 3,
-        itemMarginBottom: 8,
+        itemStyle: {
+          cursor: "pointer",
+        },
       },
+
       tooltip: {
         shared: true,
         borderColor: "rgba(0,0,0,0.15)",
@@ -1065,8 +1159,17 @@ const DataVisualizationSection = ({
           fontWeight: "500",
         },
         formatter() {
-          const header = `<b style="font-size: 13px;">${this.x}</b>`;
-          const lines = this.points.map((p) => {
+          const pts =
+            this.points && this.points.length
+              ? this.points
+              : this.point
+              ? [this.point]
+              : [];
+
+          if (!pts.length) return "";
+
+          const lines = pts.map((p) => {
+            // Scatter = Alerts layer
             if (p.series.type === "scatter") {
               const c = p.point?.custom || {};
               return `${c.emoji || "⚠️"} <b>${c.severity || "Alert"}</b> — ${
@@ -1075,31 +1178,41 @@ const DataVisualizationSection = ({
                 c.tooltip || ""
               }</span>`;
             }
-            const isForecast = p.series.name.includes(" (Forecast)");
+
+            // Line series (actual vs forecast) – WITH VALUES, NO HEADER
+            const isForecast = p.series.name.endsWith(" (Forecast)");
             const baseName = isForecast
               ? p.series.name.replace(" (Forecast)", "")
               : p.series.name;
             const disp = isForecast ? `${baseName} (Forecast)` : baseName;
+
             return `<span style="color:${p.color}">●</span> ${disp}: <b>${p.y}%</b>`;
           });
 
-          if (showGlobal && this.points?.length) {
+          // Global events block (kept as-is)
+          if (showGlobal && pts.length) {
+            const firstPoint = pts[0];
             const xIdx =
-              this.points[0]?.point?.x ?? lineCategories.indexOf(this.x);
-            const evs = (eventsByX || {})[xIdx] || [];
-            evs.forEach((ev) => {
-              lines.push(
-                `<span style="color: #1976d2;">▌</span> <b>Global:</b> ${
-                  ev.label
-                } — <span style="opacity:.85;">${
-                  ev.country_name
-                }</span><br/><span style="opacity:.75; font-size: 11px;">${
-                  ev.tooltip || ""
-                }</span>`
-              );
-            });
+              (typeof firstPoint.x === "number" ? firstPoint.x : null) ?? 
+              lineCategories.indexOf(this.x);
+            if (xIdx != null && xIdx > -1) {
+              const evs = (eventsByX || {})[xIdx] || [];
+              evs.forEach((ev) => {
+                lines.push(
+                  `<span style="color: #1976d2;">▌</span> <b>Global:</b> ${
+                    ev.label
+                  } — <span style="opacity:.85;">${
+                    ev.country_name
+                  }</span><br/><span style="opacity:.75; font-size: 11px;">${
+                    ev.tooltip || ""
+                  }</span>`
+                );
+              });
+            }
           }
-          return `${header}<br/>${lines.join("<br/>")}`;
+
+          // No header → no "8" / index / category line
+          return lines.join("<br/>");
         },
       },
       plotOptions: {
@@ -1176,7 +1289,6 @@ const DataVisualizationSection = ({
         </Tabs>
       </Box>
 
-      {/* TAB 0: PPV Forecast */}
       {selectedTab === 0 && (
         <>
           <SavingsBySupplier />
@@ -1296,6 +1408,34 @@ const DataVisualizationSection = ({
               </Stack>
             </Stack>
 
+            {/* 🔹 Icons opposite to Alerts checkbox (top-right) */}
+            <Box
+              sx={{
+                position: "absolute",
+                top: 8,
+                right: 8,
+                zIndex: 3,
+                display: "flex",
+                alignItems: "center",
+                gap: 1.3,
+              }}
+            >
+              <IconButton size="small">
+                <GridViewIcon fontSize="small" />
+              </IconButton>
+              <IconButton size="small">
+                <DownloadIcon
+                  sx={{ width: 20, height: 20, color: "text.secondary" }}
+                />
+              </IconButton>
+              <IconButton size="small">
+                <ShareIcon fontSize="small" />
+              </IconButton>
+              <IconButton size="small">
+                <SettingsIcon fontSize="small" />
+              </IconButton>
+            </Box>
+
             <Box sx={{ pt: 6 }}>
               {chartLoading ? (
                 <Stack
@@ -1330,7 +1470,6 @@ const DataVisualizationSection = ({
         </>
       )}
 
-      {/* TAB 1: Scorecard */}
       {selectedTab === 1 && (
         <Box
           sx={{
@@ -1352,7 +1491,6 @@ const DataVisualizationSection = ({
         </Box>
       )}
 
-      {/* TAB 2: SAQ */}
       {selectedTab === 2 && (
         <Box
           sx={{
@@ -1403,13 +1541,12 @@ const SupplierDataTableSection = ({
       if (v >= 7) return "#e57373";
       if (v >= 4) return "#ef9a9a";
       return "#ffcdd2";
-    } else {
-      if (v <= -13) return "#43a047";
-      if (v <= -10) return "#4caf50";
-      if (v <= -7) return "#66bb6a";
-      if (v <= -4) return "#a5d6a7";
-      return "#c8e6c9";
     }
+    if (v <= -13) return "#43a047";
+    if (v <= -10) return "#4caf50";
+    if (v <= -7) return "#66bb6a";
+    if (v <= -4) return "#a5d6a7";
+    return "#c8e6c9";
   };
 
   const textFor = (v, bg) => {
@@ -1650,8 +1787,9 @@ const SupplierDataTableSection = ({
               const raw = supplier[col.key];
               const val =
                 typeof raw === "string" ? parseFloat(raw) : Number(raw);
-              const bg = bgFor(val);
-              const fg = textFor(val, bg);
+              const num = Number.isFinite(val) ? val : null;
+              const bg = bgFor(num);
+              const fg = textFor(num, bg);
               return (
                 <Box
                   key={`${supplier.supplier_name}-${col.key}`}
@@ -1740,6 +1878,10 @@ export const DemandProjectMonth = () => {
     scrollRef.current.scrollLeft = scrollLeft.current - walk;
   };
 
+  const handleChatBubbleClick = () => {
+    handleOpenActivities();
+  };
+
   const [dateFilterKey, setDateFilterKey] = useState(0);
   const [dateRange, setDateRange] = useState({
     startDate: format(subMonths(new Date("2024-12-01"), 6), "yyyy-MM-dd"),
@@ -1754,6 +1896,8 @@ export const DemandProjectMonth = () => {
     suppliers: [],
     supplierLocations: [],
   });
+
+  const [initializedDefaults, setInitializedDefaults] = useState(false);
 
   const [selectedCountry, setSelectedCountry] = useState([]);
   const [selectedState, setSelectedState] = useState([]);
@@ -1779,6 +1923,10 @@ export const DemandProjectMonth = () => {
   const handleMoreOpen = (event) => setMoreAnchorEl(event.currentTarget);
   const handleMoreClose = () => setMoreAnchorEl(null);
 
+  const [showActivities, setShowActivities] = useState(false);
+  const handleOpenActivities = () => setShowActivities(true);
+  const handleCloseActivities = () => setShowActivities(false);
+
   const [isChatBotOpen, setIsChatBotOpen] = useState(false);
   const handleOpenChatBot = () => setIsChatBotOpen(true);
   const handleCloseChatBot = () => setIsChatBotOpen(false);
@@ -1803,6 +1951,11 @@ export const DemandProjectMonth = () => {
       )
       .finally(() => setLoadingCountries(false));
   };
+
+  // Auto-load countries on first render (for default cascade)
+  useEffect(() => {
+    fetchCountries();
+  }, []);
 
   /* -------- COUNTRY -> STATES -------- */
 
@@ -1941,6 +2094,11 @@ export const DemandProjectMonth = () => {
       suppliers: [],
       supplierLocations: [],
     }));
+
+    // Auto-load SKUs when plants are selected (helps default cascade & UX)
+    if (selectedPlants.length) {
+      fetchSkus();
+    }
   }, [selectedPlants]);
 
   /* -------- SKU -> SUPPLIERS (by sku) -------- */
@@ -1972,21 +2130,24 @@ export const DemandProjectMonth = () => {
     setFiltersData((prev) => ({ ...prev, supplierLocations: [] }));
   }, [selectedSKUs]);
 
-  /* -------- SUPPLIERS -> SUPPLIER LOCATIONS (local) -------- */
+  // Auto-fetch suppliers when SKUs are selected (to support default cascade)
+  useEffect(() => {
+    if (selectedSKUs.length && !filtersData.suppliers.length) {
+      fetchSuppliers();
+    }
+  }, [selectedSKUs, filtersData.suppliers.length]);
+
+  /* -------- SUPPLIER LOCATIONS (depend on SKU / suppliers list) -------- */
 
   const fetchSupplierLocations = () => {
-    if (!selectedSuppliers.length) return;
+    if (!selectedSKUs.length) return;
 
     const allSuppliers = filtersData.suppliers || [];
-    const selectedIdSet = new Set(selectedSuppliers.map((id) => Number(id)));
-
-    const matched = allSuppliers.filter((s) =>
-      selectedIdSet.has(Number(s.supplier_id))
-    );
+    if (!allSuppliers.length) return;
 
     const countries = Array.from(
       new Set(
-        matched
+        allSuppliers
           .map((s) => String(s.supplier_country || "").trim())
           .filter(Boolean)
       )
@@ -2002,9 +2163,10 @@ export const DemandProjectMonth = () => {
     }));
   };
 
+  // When supplier location changes, reset suppliers (supplier depends on location)
   useEffect(() => {
-    setSelectedSupplierLocations([]);
-  }, [selectedSuppliers]);
+    setSelectedSuppliers([]);
+  }, [selectedSupplierLocations]);
 
   /* -------- Savings cards (optional) -------- */
 
@@ -2036,6 +2198,90 @@ export const DemandProjectMonth = () => {
       .finally(() => setLoadingSavings(false));
   }, []);
 
+  /* -------- Default cascade: USA -> Illinois -> Chicago plant -> SKU -------- */
+
+  useEffect(() => {
+    if (initializedDefaults) return;
+
+    // 1. Country -> United States of America
+    if (!selectedCountry.length && filtersData.countries.length) {
+      const us = filtersData.countries.find(
+        (c) =>
+          c.country_name &&
+          c.country_name.toLowerCase().includes("united states")
+      );
+      if (us) {
+        setSelectedCountry([us.country_id]);
+        return; // wait for states to load
+      }
+    }
+
+    // 2. State -> Illinois
+    if (
+      selectedCountry.length &&
+      !selectedState.length &&
+      filtersData.states.length
+    ) {
+      const il = filtersData.states.find(
+        (s) => s.state_name && s.state_name.toLowerCase().includes("illinois")
+      );
+      if (il) {
+        setSelectedState([il.state_id]);
+        return; // wait for plants to load
+      }
+    }
+
+    // 3. Plant -> Chicago Tyre Plant 09
+    if (
+      selectedState.length &&
+      !selectedPlants.length &&
+      filtersData.plants.length
+    ) {
+      const plant = filtersData.plants.find(
+        (p) => p.plant_name === "Chicago Tyre Plant 09"
+      );
+      if (plant) {
+        setSelectedPlants([plant.plant_id]);
+        return; // wait for SKUs to load
+      }
+    }
+
+    // 4. SKU -> PCR-185/65R15
+    if (
+      selectedPlants.length &&
+      !selectedSKUs.length &&
+      filtersData.skus.length
+    ) {
+      const sku = filtersData.skus.find((s) => s.sku_code === "PCR-185/65R15");
+      if (sku) {
+        setSelectedSKUs([sku.sku_id]);
+        return; // wait for suppliers to load if needed
+      }
+    }
+
+    // ✅ Stop default cascade at SKU (do NOT auto-select supplier/location)
+    if (
+      selectedCountry.length &&
+      selectedState.length &&
+      selectedPlants.length &&
+      selectedSKUs.length
+    ) {
+      setInitializedDefaults(true);
+    }
+  }, [
+    initializedDefaults,
+    filtersData.countries,
+    filtersData.states,
+    filtersData.plants,
+    filtersData.skus,
+    filtersData.suppliers,
+    selectedCountry,
+    selectedState,
+    selectedPlants,
+    selectedSKUs,
+    selectedSuppliers,
+  ]);
+
   /* -------- Clear filters -------- */
 
   const handleClearFilters = () => {
@@ -2059,7 +2305,26 @@ export const DemandProjectMonth = () => {
       supplierLocations: [],
     });
     setDateFilterKey((k) => k + 1);
+
+    // If you want defaults to re-apply after Clear Filters, uncomment:
+    // setInitializedDefaults(false);
+    // fetchCountries();
   };
+
+  /* -------- Suppliers options filtered by Supplier Location -------- */
+
+  const supplierOptions = useMemo(() => {
+    const all = filtersData.suppliers || [];
+    if (!selectedSupplierLocations.length) return all;
+
+    const locSet = new Set(
+      selectedSupplierLocations.map((loc) => String(loc).toLowerCase())
+    );
+
+    return all.filter((s) =>
+      locSet.has(String(s.supplier_country || "").toLowerCase())
+    );
+  }, [filtersData.suppliers, selectedSupplierLocations]);
 
   return (
     <Box>
@@ -2158,8 +2423,6 @@ export const DemandProjectMonth = () => {
           WebkitOverflowScrolling: "touch",
           "&.dragging": { cursor: "grabbing" },
           "&::-webkit-scrollbar": { display: "none" },
-          scrollbarWidth: "none",
-          msOverflowStyle: "none",
         }}
       >
         <IconButton
@@ -2176,11 +2439,33 @@ export const DemandProjectMonth = () => {
         <Divider orientation="vertical" flexItem sx={{ bgcolor: "grey.500" }} />
 
         <Box display="flex" alignItems="center" gap={2}>
+          {/* <Box
+            position="relative"
+            width={24}
+            height={20}
+            sx={{ cursor: "pointer" }}
+          >
+            <ChatBubbleOutline sx={{ width: 20, height: 20, color: "white" }} />
+            <Box
+              component="img"
+              src="https://c.animaapp.com/Jwk7dHU9/img/ellipse-309--stroke-.svg"
+              alt="Indicator"
+              sx={{
+                position: "absolute",
+                width: 12,
+                height: 12,
+                top: 0,
+                left: 12,
+                pointerEvents: "none",
+              }}
+            />
+          </Box> */}
           <Box
             position="relative"
             width={24}
             height={20}
             sx={{ cursor: "pointer" }}
+            onClick={handleChatBubbleClick} // 👈 add this
           >
             <ChatBubbleOutline sx={{ width: 20, height: 20, color: "white" }} />
             <Box
@@ -2279,19 +2564,7 @@ export const DemandProjectMonth = () => {
             single
           />
 
-          <MultiSelectWithCheckboxes
-            label="Suppliers"
-            options={filtersData.suppliers}
-            optionKey="supplier_id"
-            displayKey="supplier_name"
-            selected={selectedSuppliers}
-            setSelected={setSelectedSuppliers}
-            searchPlaceholder="Search supplier"
-            loading={loadingSuppliers}
-            disabled={selectedSKUs.length === 0}
-            onOpen={fetchSuppliers}
-          />
-
+          {/* Supplier Location first, depends on SKU */}
           <MultiSelectWithCheckboxes
             label="Supplier Location"
             options={filtersData.supplierLocations}
@@ -2301,8 +2574,22 @@ export const DemandProjectMonth = () => {
             setSelected={setSelectedSupplierLocations}
             searchPlaceholder="Search location"
             loading={loadingSupplierLocations}
-            disabled={selectedSuppliers.length === 0}
+            disabled={selectedSKUs.length === 0}
             onOpen={fetchSupplierLocations}
+          />
+
+          {/* Suppliers now depend on Supplier Location */}
+          <MultiSelectWithCheckboxes
+            label="Supplier Name"
+            options={supplierOptions}
+            optionKey="supplier_id"
+            displayKey="supplier_name"
+            selected={selectedSuppliers}
+            setSelected={setSelectedSuppliers}
+            searchPlaceholder="Search supplier"
+            loading={loadingSuppliers}
+            disabled={selectedSupplierLocations.length === 0}
+            onOpen={fetchSuppliers}
           />
 
           <Button
@@ -2319,16 +2606,6 @@ export const DemandProjectMonth = () => {
               fontWeight: 400,
               textTransform: "none",
               px: 1.5,
-              transition: "all 0.2s ease",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              "&:hover": { borderColor: "#1976d2", bgcolor: "common.white" },
-              "&:disabled": {
-                bgcolor: "#f5f5f5",
-                borderColor: "#e0e0e0",
-                color: "#9e9e9e",
-              },
             }}
           >
             Clear Filters
@@ -2374,6 +2651,36 @@ export const DemandProjectMonth = () => {
           savingsCards={loadingSavings ? [] : savingsCards}
         />
       </Box>
+      {/* Messaging side panel (same as old ChartMessage behavior) */}
+      {showActivities && (
+        <Box
+          sx={{
+            position: "fixed",
+            top: 0,
+            right: 0,
+            height: "100vh",
+            width: 700,
+            zIndex: 1400,
+            bgcolor: "rgba(0,0,0,0.18)",
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "flex-end",
+          }}
+          onClick={handleCloseActivities}
+        >
+          <Box
+            sx={{
+              height: "100vh",
+              boxShadow: 6,
+              bgcolor: "grey.400",
+              position: "relative",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Chart onClose={handleCloseActivities} />
+          </Box>
+        </Box>
+      )}
 
       {/* Chatbot Dialog */}
       <Dialog
