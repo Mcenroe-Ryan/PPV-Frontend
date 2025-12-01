@@ -161,7 +161,7 @@ const SAVINGS_SUPPLIER_DATA = [
         id: 3,
         name: "AutoMech Gumby",
         logoUrl: "https://via.placeholder.com/30",
-        savings: "-$18.46",
+        savings: "-$9.02",
         isPositive: false,
         isChecked: true,
       },
@@ -177,7 +177,7 @@ const SAVINGS_SUPPLIER_DATA = [
         id: 5,
         name: "Shanghai Xiongda",
         logoUrl: "https://via.placeholder.com/30",
-        savings: "-$9.02",
+        savings: "-$18.46",
         isPositive: false,
         isChecked: false,
       },
@@ -208,7 +208,7 @@ const numericSavings = (val) => {
 
 // sort suppliers inside each country:
 // - green (positive) -> highest number on top
-// - red (negative)   -> lowest number (most negative) on top
+// - red (negative)   -> highest (least negative) number on top
 // - positives above negatives when mixed
 const sortSuppliersBySavings = (data) =>
   data.map((c) => ({
@@ -225,9 +225,9 @@ const sortSuppliersBySavings = (data) =>
         return bv - av; // desc
       }
 
-      // both red (negative) → lowest (most negative) first
+      // both red (negative) → highest (least negative) first
       if (!aPositive && !bPositive) {
-        return av - bv; // asc
+        return bv - av; // desc
       }
 
       // mixed: keep green above red
@@ -731,7 +731,7 @@ const DataVisualizationSection = ({
 
             if (forecastData.some((v) => typeof v === "number")) {
               seriesOut.push({
-                name: `${name} (Forecast)`,
+                name: `${name} Forecast`,
                 type: "line",
                 data: forecastData,
                 color,
@@ -2168,28 +2168,45 @@ export const DemandProjectMonth = () => {
   /* -------- SUPPLIER LOCATIONS (depend on SKU / suppliers list) -------- */
 
   const fetchSupplierLocations = () => {
+  if (!selectedSKUs.length) return;
+
+  const allSuppliers = filtersData.suppliers || [];
+  if (!allSuppliers.length) return;
+
+  const countries = Array.from(
+    new Set(
+      allSuppliers
+        .map((s) => String(s.supplier_country || "").trim())
+        .filter(Boolean)
+    )
+  );
+
+  const locationOptions = countries.map((c) => ({
+    supplier_location: c,
+  }));
+
+  setFiltersData((prev) => ({
+    ...prev,
+    supplierLocations: locationOptions,
+  }));
+
+};
+
+
+  // 🔹 Auto-populate Supplier Location (USA) once suppliers are loaded, same as other defaults
+  useEffect(() => {
     if (!selectedSKUs.length) return;
+    if (!filtersData.suppliers.length) return;
+    if (filtersData.supplierLocations.length) return;
+    if (selectedSupplierLocations.length) return;
 
-    const allSuppliers = filtersData.suppliers || [];
-    if (!allSuppliers.length) return;
-
-    const countries = Array.from(
-      new Set(
-        allSuppliers
-          .map((s) => String(s.supplier_country || "").trim())
-          .filter(Boolean)
-      )
-    );
-
-    const locationOptions = countries.map((c) => ({
-      supplier_location: c,
-    }));
-
-    setFiltersData((prev) => ({
-      ...prev,
-      supplierLocations: locationOptions,
-    }));
-  };
+    fetchSupplierLocations();
+  }, [
+    selectedSKUs,
+    filtersData.suppliers,
+    filtersData.supplierLocations,
+    selectedSupplierLocations,
+  ]);
 
   // When supplier location changes, reset suppliers (supplier depends on location)
   useEffect(() => {
@@ -2341,6 +2358,41 @@ export const DemandProjectMonth = () => {
 
   /* -------- Suppliers options filtered by Supplier Location -------- */
 
+  const effectiveSupplierIds = useMemo(() => {
+    const allSuppliers = filtersData.suppliers || [];
+
+    // 🔹 Case 1: no locations selected → show all locations
+    if (!selectedSupplierLocations.length) {
+      // but if user has explicitly picked supplier names, respect that
+      if (selectedSuppliers.length) return selectedSuppliers;
+      // empty array => backend interprets as "no supplier filter"
+      return [];
+    }
+
+    // 🔹 Case 2: one or more locations selected → only those locations
+    const locSet = new Set(
+      selectedSupplierLocations.map((loc) => String(loc).toLowerCase())
+    );
+
+    const byLocation = allSuppliers
+      .filter((s) =>
+        locSet.has(String(s.supplier_country || "").toLowerCase())
+      )
+      .map((s) => s.supplier_id);
+
+    // If user also selected supplier names, intersect the two
+    if (selectedSuppliers.length) {
+      const chosenSet = new Set(selectedSuppliers);
+      return byLocation.filter((id) => chosenSet.has(id));
+    }
+
+    return byLocation;
+  }, [
+    filtersData.suppliers,
+    selectedSupplierLocations,
+    selectedSuppliers,
+  ]);
+
   const supplierOptions = useMemo(() => {
     const all = filtersData.suppliers || [];
     if (!selectedSupplierLocations.length) return all;
@@ -2467,27 +2519,6 @@ export const DemandProjectMonth = () => {
         <Divider orientation="vertical" flexItem sx={{ bgcolor: "grey.500" }} />
 
         <Box display="flex" alignItems="center" gap={2}>
-          {/* <Box
-            position="relative"
-            width={24}
-            height={20}
-            sx={{ cursor: "pointer" }}
-          >
-            <ChatBubbleOutline sx={{ width: 20, height: 20, color: "white" }} />
-            <Box
-              component="img"
-              src="https://c.animaapp.com/Jwk7dHU9/img/ellipse-309--stroke-.svg"
-              alt="Indicator"
-              sx={{
-                position: "absolute",
-                width: 12,
-                height: 12,
-                top: 0,
-                left: 12,
-                pointerEvents: "none",
-              }}
-            />
-          </Box> */}
           <Box
             position="relative"
             width={24}
@@ -2674,7 +2705,8 @@ export const DemandProjectMonth = () => {
           stateIds={selectedState}
           plantIds={selectedPlants}
           skuIds={selectedSKUs}
-          supplierIds={selectedSuppliers}
+          // supplierIds={selectedSuppliers}
+          supplierIds={effectiveSupplierIds}
           supplierLocations={selectedSupplierLocations}
           savingsCards={loadingSavings ? [] : savingsCards}
         />

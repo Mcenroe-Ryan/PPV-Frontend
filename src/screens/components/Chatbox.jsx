@@ -1,13 +1,5 @@
-import React, { useState, useEffect } from "react";
-import {
-  Box,
-  Typography,
-  TextField,
-  IconButton,
-  Paper,
-  Avatar,
-  InputAdornment,
-} from "@mui/material";
+import React, { useState, useEffect, useRef } from "react";
+import { Box, Typography, TextField, IconButton, Paper, InputAdornment } from "@mui/material";
 import {
   Send as SendIcon,
   Mic as MicIcon,
@@ -17,49 +9,23 @@ import {
   Close as CloseIcon,
 } from "@mui/icons-material";
 import chatbot from "../assets/chatbot1.png";
+import robotLogo from "../assets/robot.svg";
 
 const ChatBot = ({ onClose }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState("");
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [hasPrefilledFirst, setHasPrefilledFirst] = useState(false);
-  const [scriptFinished, setScriptFinished] = useState(false);
-  const [botIsTyping, setBotIsTyping] = useState(false); 
+  const [botIsTyping, setBotIsTyping] = useState(false);
+  const [scriptStep, setScriptStep] = useState(0);
+  const messagesEndRef = useRef(null);
 
-  const fullMessages = [
-    {
-      id: 1,
-      text: "Hello..! John, how can I help you?",
-      isBot: true,
-      timestamp: new Date(),
-    },
-    {
-      id: 2,
-      text: "What is the forecasted demand for SKU C5240200A in the next month?",
-      isBot: false,
-      timestamp: new Date(),
-    },
-    {
-      id: 3,
-      text: "The Projected demand for SKU C5240200A in the next month is 12150 units, based on historical trends, seasonality, and external factors.",
-      isBot: true,
-      timestamp: new Date(),
-    },
-    {
-      id: 4,
-      text: "How would a 5% increase in marketing spend affect demand?",
-      isBot: false,
-      timestamp: new Date(),
-    },
-    {
-      id: 5,
-      text: "An increase in marketing spend of 5% is projected to boost demand by 12%, based on previous campaigns.",
-      isBot: true,
-      timestamp: new Date(),
-    },
-  ];
+  const openingMessage = {
+    id: 1,
+    text: "Hi! Let's evaluate suppliers for SKU54321 using Purchase Price Variance (PPV). Shall we proceed?",
+    isBot: true,
+    timestamp: new Date(),
+  };
 
-  const [visibleMessages, setVisibleMessages] = useState([fullMessages[0]]);
+  const [visibleMessages, setVisibleMessages] = useState([openingMessage]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -68,77 +34,120 @@ const ChatBot = ({ onClose }) => {
     return () => clearTimeout(timer);
   }, []);
 
-  const isSendBlocked = scriptFinished && message.trim() === "";
+  const cannedResponses = [
+    "I'm analyzing the data to provide you with accurate demand forecasting insights...",
+    "Based on historical trends and market analysis, I can provide you with detailed projections...",
+    "Let me process your request and generate relevant business insights for you...",
+    "I'm accessing the latest market data to give you precise forecasting information...",
+  ];
+
+  const scriptedFirstReply = "Yes, show me the details for SKU54321.";
+  const scriptedSecondReply = "Show me the PPV trend for the last 3 months.";
+  const scriptedThirdReply = "Yes, show Bharat Supplies' delivery metrics.";
+  const scriptedFourthReply = "Looks good. Select Bharat Supplies for SKU54321.";
+  const tablePayload = {
+    columns: [
+      { key: "supplier", label: "Supplier" },
+      { key: "price", label: "Actual Price" },
+      { key: "ppv", label: "PPV (%)" },
+    ],
+    rows: [
+      { supplier: "GlobalParts Inc.", price: "$102", ppv: "+7.37%" },
+      { supplier: "AutoMech GmbH", price: "$97", ppv: "+2.11%" },
+      { supplier: "Bharat Supplies", price: "$94", ppv: "-1.05%" },
+    ],
+    prompt: "Would you like to see price trends or check other performance metrics?",
+  };
+  const ppvTrendPayload = {
+    columns: [
+      { key: "supplier", label: "Supplier" },
+      { key: "jan", label: "Jan" },
+      { key: "feb", label: "Feb" },
+      { key: "mar", label: "Mar" },
+    ],
+    rows: [
+      { supplier: "GlobalParts Inc.", jan: "+5.26%", feb: "+7.37%", mar: "+7.37%" },
+      { supplier: "AutoMech GmbH", jan: "+1.05%", feb: "+3.16%", mar: "+2.11%" },
+      { supplier: "Bharat Supplies", jan: "-2.11%", feb: "0.00%", mar: "-1.05%" },
+    ],
+    prompt:
+      "Bharat Supplies consistently offers better-than-target pricing. Would you like to consider delivery performance as well?",
+  };
+
+  const scriptedSteps = [
+    { step: 0, reply: scriptedFirstReply, next: 1 },
+    { step: 2, reply: scriptedSecondReply, next: 3 },
+    { step: 4, reply: scriptedThirdReply, next: 5 },
+    { step: 6, reply: scriptedFourthReply, next: 7 },
+  ];
+
+  const scriptedResponses = {
+    1: { type: "table", payload: tablePayload, nextStep: 2 },
+    3: { type: "table", payload: ppvTrendPayload, nextStep: 4 },
+    5: {
+      type: "text",
+      payload: "Bharat Supplies averages 4.2 days for delivery with a 95% on-time rate over the last quarter.",
+      nextStep: 6,
+    },
+    7: {
+      type: "text",
+      payload: "Got it. Bharat Supplies has been selected for SKU54321.",
+      nextStep: 8,
+    },
+  };
 
   const handleSendMessage = () => {
-    if (isSendBlocked || botIsTyping) return;
+    if (botIsTyping) return;
+    let trimmed = message.trim();
 
-    if (!hasPrefilledFirst) {
-      setMessage(fullMessages[1].text);
-      setHasPrefilledFirst(true);
+    const scriptedMatch = scriptedSteps.find((s) => s.step === scriptStep && !trimmed);
+    if (scriptedMatch) {
+      setMessage(scriptedMatch.reply);
+      setScriptStep(scriptedMatch.next);
       return;
     }
 
-    if (hasPrefilledFirst && currentIndex === 0) {
-      const userMessage = {
-        ...fullMessages[1],
-        text: message,
-      };
-      setVisibleMessages((prev) => [...prev, userMessage]);
-      setMessage("");
-      setCurrentIndex(1);
+    if (!trimmed) return;
 
-      setBotIsTyping(true);
-      setTimeout(() => {
-        setVisibleMessages((prev) => [...prev, fullMessages[2]]);
-        setCurrentIndex(2);
-        setBotIsTyping(false);
-      }, 800);
-      return;
-    }
-
-    if (currentIndex < fullMessages.length - 1) {
-      const nextIndex = currentIndex + 1;
-      const nextMsg = fullMessages[nextIndex];
-
-      if (!nextMsg.isBot) {
-        setMessage(nextMsg.text);
-        return;
-      } else {
-        setBotIsTyping(true);
-        setVisibleMessages((prev) => [...prev, nextMsg]);
-        setCurrentIndex(nextIndex);
-        if (nextIndex === fullMessages.length - 1) {
-          setScriptFinished(true);
-        }
-        setBotIsTyping(false);
-        return;
-      }
-    }
-
-    if (message.trim() === "") return;
-
-    const newMessage = {
-      id: visibleMessages.length + 1,
-      text: message,
+    const userMessage = {
+      id: Date.now(),
+      text: trimmed,
       isBot: false,
       timestamp: new Date(),
     };
-    setVisibleMessages([...visibleMessages, newMessage]);
+    setVisibleMessages((prev) => [...prev, userMessage]);
     setMessage("");
+
+    if (scriptedResponses[scriptStep]) {
+      const response = scriptedResponses[scriptStep];
+      setScriptStep(response.nextStep);
+      setBotIsTyping(true);
+      setTimeout(() => {
+        const botResponse = response.type === "table"
+          ? {
+            id: Date.now() + 1,
+            isBot: true,
+            type: "table",
+            table: response.payload,
+          }
+          : {
+            id: Date.now() + 1,
+            isBot: true,
+            text: response.payload,
+            timestamp: new Date(),
+          };
+        setVisibleMessages((prev) => [...prev, botResponse]);
+        setBotIsTyping(false);
+      }, 600);
+      return;
+    }
 
     setBotIsTyping(true);
     setTimeout(() => {
-      const responses = [
-        "I'm analyzing the data to provide you with accurate demand forecasting insights...",
-        "Based on historical trends and market analysis, I can provide you with detailed projections...",
-        "Let me process your request and generate relevant business insights for you...",
-        "I'm accessing the latest market data to give you precise forecasting information...",
-      ];
       const randomResponse =
-        responses[Math.floor(Math.random() * responses.length)];
+        cannedResponses[Math.floor(Math.random() * cannedResponses.length)];
       const botResponse = {
-        id: visibleMessages.length + 2,
+        id: Date.now() + 1,
         text: randomResponse,
         isBot: true,
         timestamp: new Date(),
@@ -148,73 +157,20 @@ const ChatBot = ({ onClose }) => {
     }, 1000);
   };
 
-  const handleSendPrefilledMessage = () => {
-    if (isSendBlocked || botIsTyping || message.trim() === "") return;
-
-    let userMessageIndex = -1;
-    for (let i = currentIndex; i < fullMessages.length; i++) {
-      if (!fullMessages[i].isBot) {
-        userMessageIndex = i;
-        break;
-      }
-    }
-
-    if (userMessageIndex !== -1) {
-      const userMessage = {
-        ...fullMessages[userMessageIndex],
-        text: message,
-      };
-      setVisibleMessages((prev) => [...prev, userMessage]);
-      setMessage("");
-      setCurrentIndex(userMessageIndex);
-
-      if (userMessageIndex + 1 < fullMessages.length) {
-        setBotIsTyping(true);
-        setTimeout(() => {
-          setVisibleMessages((prev) => [
-            ...prev,
-            fullMessages[userMessageIndex + 1],
-          ]);
-          setCurrentIndex(userMessageIndex + 1);
-          if (userMessageIndex + 1 === fullMessages.length - 1) {
-            setScriptFinished(true);
-          }
-          setBotIsTyping(false);
-        }, 800);
-      } else {
-        setScriptFinished(true);
-      }
-    }
-  };
-
   const handleKeyPress = (event) => {
-    if (event.key === "Enter") {
+    if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      if (isSendBlocked || botIsTyping) return;
-      if (
-        hasPrefilledFirst &&
-        message.trim() !== "" &&
-        currentIndex < fullMessages.length - 1
-      ) {
-        handleSendPrefilledMessage();
-      } else {
-        handleSendMessage();
-      }
+      handleSendMessage();
     }
   };
 
   const handleSendClick = () => {
-    if (isSendBlocked || botIsTyping) return;
-    if (
-      hasPrefilledFirst &&
-      message.trim() !== "" &&
-      currentIndex < fullMessages.length - 1
-    ) {
-      handleSendPrefilledMessage();
-    } else {
-      handleSendMessage();
-    }
+    handleSendMessage();
   };
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [visibleMessages]);
 
   if (isLoading) {
     return (
@@ -276,29 +232,29 @@ const ChatBot = ({ onClose }) => {
           borderBottom: "1px solid #e0e0e0",
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-          <IconButton size="small" sx={{ color: "#666" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.2 }}>
+          <IconButton size="small" sx={{ color: BOT_COLOR }}>
             <ArrowBackIcon />
           </IconButton>
-          <Avatar
+          <BotBadge size={32} />
+          <Typography
+            variant="h6"
             sx={{
-              bgcolor: "#4285f4",
-              color: "white",
-              width: 40,
-              height: 40,
+              fontWeight: 600,
+              color: BOT_COLOR,
+              fontSize: 18,
+              letterSpacing: 0.2,
+              fontFamily: "'Inter', 'Segoe UI', sans-serif",
             }}
           >
-            🤖
-          </Avatar>
-          <Typography variant="h6" sx={{ fontWeight: "600", color: "#4285f4" }}>
             Planner Assistant
           </Typography>
         </Box>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <IconButton size="small" sx={{ color: "#666" }}>
+          <IconButton size="small" sx={{ color: BOT_COLOR }}>
             <VolumeUpIcon />
           </IconButton>
-          <IconButton size="small" sx={{ color: "#666" }} onClick={onClose}>
+          <IconButton size="small" sx={{ color: BOT_COLOR }} onClick={onClose}>
             <CloseIcon />
           </IconButton>
         </Box>
@@ -315,52 +271,128 @@ const ChatBot = ({ onClose }) => {
           gap: 3,
         }}
       >
-        {visibleMessages.map((msg) => (
-          <Box
-            key={msg.id}
-            sx={{
-              display: "flex",
-              justifyContent: msg.isBot ? "flex-start" : "flex-end",
-              alignItems: "flex-start",
-              gap: 1,
-            }}
-          >
-            {msg.isBot && (
-              <Avatar
-                sx={{
-                  bgcolor: "#4285f4",
-                  color: "white",
-                  width: 32,
-                  height: 32,
-                  fontSize: "16px",
-                }}
-              >
-                🤖
-              </Avatar>
-            )}
-            <Paper
-              elevation={0}
+        {visibleMessages.map((msg) => {
+          const isTable = msg.type === "table";
+          return (
+            <Box
+              key={msg.id}
               sx={{
-                p: 2.5,
-                maxWidth: "75%",
-                bgcolor: msg.isBot ? "#f1f3f4" : "#4285f4",
-                color: msg.isBot ? "#333" : "white",
-                borderRadius: msg.isBot
-                  ? "0 20px 20px 20px"
-                  : "20px 0 20px 20px",
-                fontSize: "14px",
-                lineHeight: 1.4,
-                boxShadow: msg.isBot
-                  ? "none"
-                  : "0 2px 10px rgba(66, 133, 244, 0.3)",
+                display: "flex",
+                justifyContent: msg.isBot ? "flex-start" : "flex-end",
+                alignItems: "flex-start",
+                gap: 1.5,
               }}
             >
-              <Typography variant="body2" sx={{ fontSize: "14px" }}>
-                {msg.text}
-              </Typography>
-            </Paper>
-          </Box>
-        ))}
+              {msg.isBot && <BotBadge size={32} />}
+              {isTable ? (
+                <Box
+                  sx={{
+                    bgcolor: "#F7F7F7",
+                    borderRadius: "20px",
+                    border: "1px solid #E2E2E2",
+                    p: 2.5,
+                    maxWidth: "80%",
+                    boxShadow: "0 5px 18px rgba(15, 23, 42, 0.08)",
+                  }}
+                >
+                  <Box
+                    component="table"
+                    sx={{
+                      width: "100%",
+                      borderCollapse: "collapse",
+                      fontSize: 14,
+                      color: "#475569",
+                    }}
+                  >
+                    <Box component="thead" sx={{ bgcolor: "#ECECEC" }}>
+                      <Box component="tr">
+                        {msg.table.columns.map((col) => (
+                          <Box
+                            key={col.key}
+                            component="th"
+                            sx={{
+                              textAlign: "left",
+                              padding: "10px 18px",
+                              fontWeight: 600,
+                              color: "#475569",
+                              borderRight: "1px solid #D7D7D7",
+                              "&:last-of-type": { borderRight: "none" },
+                            }}
+                          >
+                            {col.label}
+                          </Box>
+                        ))}
+                      </Box>
+                    </Box>
+                    <Box component="tbody">
+                      {msg.table.rows.map((row, idx) => (
+                        <Box
+                          component="tr"
+                          key={`${row.supplier}-${idx}`}
+                          sx={{ bgcolor: idx % 2 ? "#FDFDFD" : "#FFFFFF" }}
+                        >
+                          {msg.table.columns.map((col, colIdx) => (
+                            <Box
+                              key={`${row.supplier}-${col.key}`}
+                              component="td"
+                              sx={{
+                                padding: "10px 18px",
+                                borderTop: "1px solid #E3E3E3",
+                                borderRight:
+                                  colIdx === msg.table.columns.length - 1
+                                    ? "none"
+                                    : "1px solid #E3E3E3",
+                                fontWeight: colIdx === 0 ? 500 : 400,
+                                color: "#4B5563",
+                              }}
+                            >
+                              {row[col.key]}
+                            </Box>
+                          ))}
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      mt: 1.5,
+                      fontSize: 14,
+                      color: "#5C6B7A",
+                      textAlign: "left",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {msg.table.prompt}
+                  </Typography>
+                </Box>
+              ) : (
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2.4,
+                    maxWidth: "70%",
+                    bgcolor: msg.isBot ? "#F1F3F4" : "#1F6CAB",
+                    color: msg.isBot ? "#1F2933" : "white",
+                    borderRadius: msg.isBot
+                      ? "16px 16px 16px 4px"
+                      : "16px 16px 4px 16px",
+                    fontSize: 14,
+                    lineHeight: 1.5,
+                    boxShadow: msg.isBot
+                      ? "inset 0 1px 0 rgba(255,255,255,0.4)"
+                      : "0 6px 16px rgba(31,108,171,0.28)",
+                  }}
+                >
+                  <Typography variant="body2" sx={{ fontSize: 14 }}>
+                    {msg.text}
+                  </Typography>
+                </Paper>
+              )}
+            </Box>
+          );
+        })}
+        <Box ref={messagesEndRef} />
       </Box>
 
       {/* Input */}
@@ -375,7 +407,7 @@ const ChatBot = ({ onClose }) => {
           fullWidth
           multiline
           maxRows={3}
-          placeholder="Ask your question here...!"
+          placeholder="Ask your question here..!"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyPress={handleKeyPress}
@@ -384,25 +416,27 @@ const ChatBot = ({ onClose }) => {
           InputProps={{
             endAdornment: (
               <InputAdornment position="end">
-                <IconButton size="small" sx={{ color: "#666" }}>
+                <IconButton size="small" sx={{ color: "#8C9BA8" }}>
                   <AttachFileIcon />
                 </IconButton>
-                <IconButton size="small" sx={{ color: "#666" }}>
+                <IconButton size="small" sx={{ color: "#8C9BA8" }}>
                   <MicIcon />
                 </IconButton>
                 <IconButton
                   size="small"
                   onClick={handleSendClick}
                   sx={{
-                    bgcolor: "#4285f4",
+                    bgcolor: "#1F6CAB",
                     color: "white",
                     "&:hover": {
-                      bgcolor: "#3367d6",
+                      bgcolor: "#18537F",
                     },
+                    width: 38,
+                    height: 38,
                     ml: 1,
                   }}
                 >
-                  <SendIcon />
+                  <SendIcon sx={{ fontSize: 20 }} />
                 </IconButton>
               </InputAdornment>
             ),
@@ -427,3 +461,19 @@ const ChatBot = ({ onClose }) => {
 };
 
 export default ChatBot;
+const BOT_COLOR = "#0B5B85";
+
+const BotBadge = ({ size = 36 }) => (
+  <Box
+    component="img"
+    src={robotLogo}
+    alt="Planner Assistant"
+    sx={{
+      width: size,
+      height: size,
+      flexShrink: 0,
+      objectFit: "cover",
+      filter: "none",
+    }}
+  />
+);

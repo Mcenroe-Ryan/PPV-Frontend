@@ -1,4 +1,5 @@
-import React, { useState, useId } from "react";
+import React, { useState, useId, useEffect } from "react";
+import axios from "axios";
 import Radio from "@mui/material/Radio";
 import {
   Box,
@@ -37,6 +38,11 @@ const COLORS = {
   red500: "#EF4444",
   yellow500: "#EAB308",
 };
+
+/* -------------------------------------------------
+   API Base URL (from Vite env)
+-------------------------------------------------- */
+const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 const IconOperational = ({ color = COLORS.green600, size = 22 }) => (
   <Box
@@ -93,7 +99,12 @@ const IconOperational = ({ color = COLORS.green600, size = 22 }) => (
       strokeWidth={0.6}
       strokeLinejoin="round"
     />
-    <path d="M12.9165 13.95V16.65" stroke={color} strokeWidth={0.6} strokeLinejoin="round" />
+    <path
+      d="M12.9165 13.95V16.65"
+      stroke={color}
+      strokeWidth={0.6}
+      strokeLinejoin="round"
+    />
     <path
       d="M4.16683 16.65H2.0835C1.80572 16.65 0.833496 16.65 0.833496 15.3V13.95C0.833496 13.35 1.16683 12.15 2.50016 12.15H4.5835"
       stroke={color}
@@ -160,7 +171,13 @@ const IconEnvironmental = ({ color = COLORS.green600, size = 22 }) => (
       "M11.7354 4.15381H12.353",
       "M11.7354 5.53845H12.353",
     ].map((d) => (
-      <path key={d} d={d} stroke={color} strokeWidth={0.6} strokeLinejoin="round" />
+      <path
+        key={d}
+        d={d}
+        stroke={color}
+        strokeWidth={0.6}
+        strokeLinejoin="round"
+      />
     ))}
     {[
       "M16.0586 15.2308V4.84619",
@@ -169,7 +186,13 @@ const IconEnvironmental = ({ color = COLORS.green600, size = 22 }) => (
       "M14.206 8.30764H16.0589C16.0589 7.61533 15.4413 6.23071 14.8236 6.23071H12.9707C12.9707 7.89225 13.7943 8.30764 14.206 8.30764Z",
       "M14.206 4.84621H16.0589C15.5648 3.18467 14.6177 2.76929 14.206 2.76929H12.9707C12.9707 4.43083 13.7943 4.84621 14.206 4.84621Z",
     ].map((d) => (
-      <path key={d} d={d} stroke={color} strokeWidth={0.6} strokeLinejoin="round" />
+      <path
+        key={d}
+        d={d}
+        stroke={color}
+        strokeWidth={0.6}
+        strokeLinejoin="round"
+      />
     ))}
     <path
       d="M3.08831 6.50765C3.90699 6.50765 4.57066 5.76375 4.57066 4.84611C4.57066 3.92847 3.90699 3.18457 3.08831 3.18457C2.26963 3.18457 1.60596 3.92847 1.60596 4.84611C1.60596 5.76375 2.26963 6.50765 3.08831 6.50765Z"
@@ -265,7 +288,13 @@ const IconFinance = ({ color = COLORS.green600, size = 22 }) => {
           "M9 12V12.5",
           "M9 10V9.5",
         ].map((d) => (
-          <path key={d} d={d} stroke={color} strokeWidth={0.6} strokeLinejoin="round" />
+          <path
+            key={d}
+            d={d}
+            stroke={color}
+            strokeWidth={0.6}
+            strokeLinejoin="round"
+          />
         ))}
       </g>
     </Box>
@@ -308,8 +337,16 @@ const IconLegal = ({ color = COLORS.green600, size = 22 }) => {
           stroke={color}
           strokeWidth={0.7}
         />
-        <path d="M4.20117 6.61584L8.1402 8.49085" stroke={color} strokeWidth={0.7} />
-        <path d="M6.51758 1.45959L10.4566 3.33459" stroke={color} strokeWidth={0.7} />
+        <path
+          d="M4.20117 6.61584L8.1402 8.49085"
+          stroke={color}
+          strokeWidth={0.7}
+        />
+        <path
+          d="M6.51758 1.45959L10.4566 3.33459"
+          stroke={color}
+          strokeWidth={0.7}
+        />
       </g>
     </Box>
   );
@@ -361,7 +398,12 @@ const LegendHeader = ({ onOpenConfig, selectedMetric, onSelectMetric }) => {
       {/* Recommended pill */}
       <Stack direction="row" spacing={1} alignItems="center">
         <Box
-          sx={{ width: 13, height: 13, bgcolor: "#60a5fa", borderRadius: "50%" }}
+          sx={{
+            width: 13,
+            height: 13,
+            bgcolor: "#60a5fa",
+            borderRadius: "50%",
+          }}
         />
         <Typography sx={{ fontSize: 13, color: COLORS.gray600 }}>
           Recommended
@@ -371,9 +413,7 @@ const LegendHeader = ({ onOpenConfig, selectedMetric, onSelectMetric }) => {
       <Divider orientation="vertical" flexItem sx={{ height: 28 }} />
 
       {/* Score legend */}
-      <Typography
-        sx={{ fontSize: 13, fontWeight: 600, color: COLORS.gray600 }}
-      >
+      <Typography sx={{ fontSize: 13, fontWeight: 600, color: COLORS.gray600 }}>
         Score:
       </Typography>
 
@@ -459,7 +499,9 @@ const LegendHeader = ({ onOpenConfig, selectedMetric, onSelectMetric }) => {
           bgcolor: "#FFFFFF",
           borderRadius: "6px",
           "& .MuiOutlinedInput-notchedOutline": { borderColor: "#E2E8F0" },
-          "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#CBD5E1" },
+          "&:hover .MuiOutlinedInput-notchedOutline": {
+            borderColor: "#CBD5E1",
+          },
           "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
             borderColor: "#2563EB",
           },
@@ -574,6 +616,13 @@ const SUPPLIERS = [
     ],
   },
 ];
+
+// map UI supplier -> backend supplier_id
+const SUPPLIER_ID_MAP = {
+  gpi: 7, // matches your example payload
+  gumby: 8, // adjust as per your DB
+  bharat: 9, // adjust as per your DB
+};
 
 /* -------------------------------------------------
    Explainability bar cards (bottom row when tab = Explainability)
@@ -733,137 +782,340 @@ const ExplainabilityCard = ({ title, color, factors }) => {
 
 /* -------------------------------------------------
    Factors line/area chart cards (bottom row when tab = Factors)
+   NOW: Quantity card can use API data, others stay as before.
 -------------------------------------------------- */
-const FactorCard = ({ title, color, gradient, yLabels }) => (
-  <Paper
-    elevation={0}
-    sx={{
-      background: COLORS.white,
-      border: `1px solid ${COLORS.gray200}`,
-      borderRadius: "8px",
-      p: 1.5,
-      flex: 1,
-      height: 240,
-      position: "relative",
-    }}
-  >
-    {/* Card title */}
-    <Typography
-      sx={{
-        fontWeight: 600,
-        fontSize: 15,
-        color: COLORS.gray700,
-        mb: 1,
-        whiteSpace: "nowrap",
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-      }}
-    >
-      {title}
-    </Typography>
-
-    {/* Simple static SVG chart – matches your Figma style */}
-    <Box sx={{ display: "flex", height: 180 }}>
-      {/* Y-axis labels */}
-      <Box
+const FactorCard = ({ title, color, gradient, yLabels, data }) => {
+  // If no dynamic data provided, fall back to your original static look
+  if (!data || data.length === 0) {
+    return (
+      <Paper
+        elevation={0}
         sx={{
-          width: 35,
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-          alignItems: "center",
-          mr: 1,
+          background: COLORS.white,
+          border: `1px solid ${COLORS.gray200}`,
+          borderRadius: "8px",
+          p: 1.5,
+          flex: 1,
+          height: 240,
+          position: "relative",
         }}
       >
-        {yLabels.map((v) => (
-          <Typography key={v} sx={{ fontSize: 11, color: "#94A3B8" }}>
-            {v}
-          </Typography>
-        ))}
-      </Box>
-
-      {/* Chart area */}
-      <Box sx={{ flex: 1, position: "relative" }}>
-        <svg width="100%" height="150" viewBox="0 0 350 150">
-          <defs>
-            <linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={color} stopOpacity="0.35" />
-              <stop offset="100%" stopColor={color} stopOpacity="0.05" />
-            </linearGradient>
-          </defs>
-
-          {/* Grid lines */}
-          {[0, 37, 74, 111, 148, 185, 222, 259, 296, 333].map((x, i) => (
-            <line
-              key={i}
-              x1={x}
-              y1="0"
-              x2={x}
-              y2="150"
-              stroke="#E2E8F0"
-              strokeWidth="0.5"
-            />
-          ))}
-          {[0, 30, 60, 90, 120, 150].map((y, i) => (
-            <line
-              key={i}
-              x1="0"
-              y1={y}
-              x2="350"
-              y2={y}
-              stroke="#E2E8F0"
-              strokeWidth="0.5"
-            />
-          ))}
-
-          {/* Future forecast highlight */}
-          <rect x="280" y="0" width="70" height="150" fill={color} opacity="0.08" />
-
-          {/* Solid line (history) */}
-          <path
-            d="M0,110 L50,90 L100,100 L150,80 L200,105 L250,85 L280,95"
-            fill="none"
-            stroke={color}
-            strokeWidth="2"
-          />
-
-          {/* Dashed line (forecast) */}
-          <path
-            d="M280,95 L310,100 L350,80"
-            fill="none"
-            stroke={color}
-            strokeWidth="2"
-            strokeDasharray="5,5"
-          />
-
-          {/* Area under curve */}
-          <path
-            d="M0,110 L50,90 L100,100 L150,80 L200,105 L250,85 L280,95 L350,80 L350,150 L0,150 Z"
-            fill={`url(#${gradient})`}
-          />
-        </svg>
-
-        {/* X-axis years */}
-        <Box
+        {/* Card title */}
+        <Typography
           sx={{
-            position: "absolute",
-            bottom: 0,
-            left: 20,
-            right: 15,
-            display: "flex",
-            justifyContent: "space-between",
+            fontWeight: 600,
+            fontSize: 15,
+            color: COLORS.gray700,
+            mb: 1,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
           }}
         >
-          {["2023", "2024", "2025"].map((year) => (
-            <Typography key={year} sx={{ fontSize: 11, color: "#94A3B8" }}>
-              {year}
+          {title}
+        </Typography>
+
+        {/* Simple static SVG chart – matches your Figma style */}
+        <Box sx={{ display: "flex", height: 180 }}>
+          {/* Y-axis labels */}
+          <Box
+            sx={{
+              width: 35,
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              alignItems: "center",
+              mr: 1,
+            }}
+          >
+            {yLabels.map((v) => (
+              <Typography key={v} sx={{ fontSize: 11, color: "#94A3B8" }}>
+                {v}
+              </Typography>
+            ))}
+          </Box>
+
+          {/* Chart area */}
+          <Box sx={{ flex: 1, position: "relative" }}>
+            <svg width="100%" height="150" viewBox="0 0 350 150">
+              <defs>
+                <linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+                  <stop offset="100%" stopColor={color} stopOpacity="0.05" />
+                </linearGradient>
+              </defs>
+
+              {/* Grid lines */}
+              {[0, 37, 74, 111, 148, 185, 222, 259, 296, 333].map((x, i) => (
+                <line
+                  key={i}
+                  x1={x}
+                  y1="0"
+                  x2={x}
+                  y2="150"
+                  stroke="#E2E8F0"
+                  strokeWidth="0.5"
+                />
+              ))}
+              {[0, 30, 60, 90, 120, 150].map((y, i) => (
+                <line
+                  key={i}
+                  x1="0"
+                  y1={y}
+                  x2="350"
+                  y2={y}
+                  stroke="#E2E8F0"
+                  strokeWidth="0.5"
+                />
+              ))}
+
+              {/* Future forecast highlight */}
+              <rect
+                x="280"
+                y="0"
+                width="70"
+                height="150"
+                fill={color}
+                opacity="0.08"
+              />
+
+              {/* Solid line (history) */}
+              <path
+                d="M0,110 L50,90 L100,100 L150,80 L200,105 L250,85 L280,95"
+                fill="none"
+                stroke={color}
+                strokeWidth="2"
+              />
+
+              {/* Dashed line (forecast) */}
+              <path
+                d="M280,95 L310,100 L350,80"
+                fill="none"
+                stroke={color}
+                strokeWidth="2"
+                strokeDasharray="5,5"
+              />
+
+              {/* Area under curve */}
+              <path
+                d="M0,110 L50,90 L100,100 L150,80 L200,105 L250,85 L280,95 L350,80 L350,150 L0,150 Z"
+                fill={`url(#${gradient})`}
+              />
+            </svg>
+
+            {/* X-axis years */}
+            <Box
+              sx={{
+                position: "absolute",
+                bottom: 0,
+                left: 20,
+                right: 15,
+                display: "flex",
+                justifyContent: "space-between",
+              }}
+            >
+              {["2023", "2024", "2025"].map((year) => (
+                <Typography key={year} sx={{ fontSize: 11, color: "#94A3B8" }}>
+                  {year}
+                </Typography>
+              ))}
+            </Box>
+          </Box>
+        </Box>
+      </Paper>
+    );
+  }
+
+  // Dynamic version using API data, but keeping the same visual style
+  const width = 350;
+  const height = 150;
+
+  const numericValues = data.map((d) => Number(d.y_value ?? 0));
+  const minVal = Math.min(...numericValues);
+  const maxVal = Math.max(...numericValues);
+  const range = maxVal - minVal || 1;
+
+  const verticalPadding = 15;
+  const chartBottom = height - verticalPadding;
+
+  const points = data.map((d, index) => {
+    const t = data.length === 1 ? 0 : index / (data.length - 1);
+    const x = t * width;
+    const norm = (Number(d.y_value ?? 0) - minVal) / range;
+    const y = chartBottom - norm * (height - 2 * verticalPadding);
+    return { x, y, is_forecast: d.is_forecast };
+  });
+
+  const firstForecastIndex = data.findIndex((d) => d.is_forecast);
+  const hasForecast = firstForecastIndex !== -1;
+  const lastIndex = data.length - 1;
+
+  const makePath = (pts) =>
+    pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x},${p.y}`).join(" ");
+
+  const allPath = makePath(points);
+  const pastPoints = hasForecast
+    ? points.slice(0, firstForecastIndex + 1)
+    : points;
+  const forecastPoints = hasForecast ? points.slice(firstForecastIndex) : [];
+
+  const pastPath = makePath(pastPoints);
+  const forecastPath = hasForecast ? makePath(forecastPoints) : "";
+
+  const areaPath =
+    allPath +
+    ` L ${points[lastIndex].x},${chartBottom} L ${points[0].x},${chartBottom} Z`;
+
+  let futureRect = null;
+  if (hasForecast) {
+    const xStart = points[firstForecastIndex].x;
+    const xEnd = points[lastIndex].x;
+    const w = Math.max(0, xEnd - xStart);
+    futureRect = { xStart, w };
+  }
+
+  const labels =
+    yLabels && yLabels.length
+      ? yLabels
+      : [
+          maxVal.toFixed(1),
+          ((maxVal + minVal) / 2).toFixed(1),
+          minVal.toFixed(1),
+        ];
+
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        background: COLORS.white,
+        border: `1px solid ${COLORS.gray200}`,
+        borderRadius: "8px",
+        p: 1.5,
+        flex: 1,
+        height: 240,
+        position: "relative",
+      }}
+    >
+      {/* Card title */}
+      <Typography
+        sx={{
+          fontWeight: 600,
+          fontSize: 15,
+          color: COLORS.gray700,
+          mb: 1,
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {title}
+      </Typography>
+
+      <Box sx={{ display: "flex", height: 180 }}>
+        {/* Y-axis labels */}
+        <Box
+          sx={{
+            width: 35,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            alignItems: "center",
+            mr: 1,
+          }}
+        >
+          {labels.map((v) => (
+            <Typography key={v} sx={{ fontSize: 11, color: "#94A3B8" }}>
+              {v}
             </Typography>
           ))}
         </Box>
+
+        {/* Chart area */}
+        <Box sx={{ flex: 1, position: "relative" }}>
+          <svg width="100%" height="150" viewBox={`0 0 ${width} ${height}`}>
+            <defs>
+              <linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+                <stop offset="100%" stopColor={color} stopOpacity="0.05" />
+              </linearGradient>
+            </defs>
+
+            {/* Grid lines */}
+            {[0, 37, 74, 111, 148, 185, 222, 259, 296, 333].map((x, i) => (
+              <line
+                key={`v-${i}`}
+                x1={x}
+                y1="0"
+                x2={x}
+                y2={height}
+                stroke="#E2E8F0"
+                strokeWidth="0.5"
+              />
+            ))}
+            {[0, 30, 60, 90, 120, 150].map((y, i) => (
+              <line
+                key={`h-${i}`}
+                x1="0"
+                y1={y}
+                x2={width}
+                y2={y}
+                stroke="#E2E8F0"
+                strokeWidth="0.5"
+              />
+            ))}
+
+            {/* Future forecast highlight */}
+            {futureRect && (
+              <rect
+                x={futureRect.xStart}
+                y="0"
+                width={futureRect.w}
+                height={height}
+                fill={color}
+                opacity="0.08"
+              />
+            )}
+
+            {/* Area under curve */}
+            <path d={areaPath} fill={`url(#${gradient})`} />
+
+            {/* Solid line (history) */}
+            <path d={pastPath} fill="none" stroke={color} strokeWidth="2" />
+
+            {/* Dashed line (forecast) */}
+            {hasForecast && (
+              <path
+                d={forecastPath}
+                fill="none"
+                stroke={color}
+                strokeWidth="2"
+                strokeDasharray="5,5"
+              />
+            )}
+          </svg>
+
+          {/* X-axis years – keep same visual */}
+          <Box
+            sx={{
+              position: "absolute",
+              bottom: 0,
+              left: 20,
+              right: 15,
+              display: "flex",
+              justifyContent: "space-between",
+            }}
+          >
+            {["2023", "2024", "2025"].map((year) => (
+              <Typography key={year} sx={{ fontSize: 11, color: "#94A3B8" }}>
+                {year}
+              </Typography>
+            ))}
+          </Box>
+        </Box>
       </Box>
-    </Box>
-  </Paper>
-);
+    </Paper>
+  );
+};
 
 /* -------------------------------------------------
    Radar chart (custom pentagon)
@@ -877,19 +1129,26 @@ const RadarChart = ({ scores }) => {
   );
 
   const polygonPath =
-    points
-      .map((p, idx) => `${idx === 0 ? "M" : "L"} ${p.x},${p.y}`)
-      .join(" ") + " Z";
+    points.map((p, idx) => `${idx === 0 ? "M" : "L"} ${p.x},${p.y}`).join(" ") +
+    " Z";
 
   const gridPolygons = levels.map((lvl) => {
-    const ringPoints = axisAngles.map((angle) => polarToPoint(angle, lvl * 0.5));
+    const ringPoints = axisAngles.map((angle) =>
+      polarToPoint(angle, lvl * 0.5)
+    );
     const path =
-      ringPoints.map((p, idx) => `${idx === 0 ? "M" : "L"} ${p.x},${p.y}`).join(" ") + " Z";
+      ringPoints
+        .map((p, idx) => `${idx === 0 ? "M" : "L"} ${p.x},${p.y}`)
+        .join(" ") + " Z";
     return path;
   });
 
   return (
-    <Box component="svg" viewBox="0 0 100 100" sx={{ width: "100%", height: "100%" }}>
+    <Box
+      component="svg"
+      viewBox="0 0 100 100"
+      sx={{ width: "100%", height: "100%" }}
+    >
       {/* Grid rings */}
       {gridPolygons.map((path, idx) => (
         <path
@@ -944,12 +1203,20 @@ const RadarChart = ({ scores }) => {
 /* -------------------------------------------------
    Supplier Card (includes icons + radar)
 -------------------------------------------------- */
-const SupplierCard = ({ supplier, isActive, activeTab, onChange, selectedMetric }) => {
+const SupplierCard = ({
+  supplier,
+  isActive,
+  activeTab,
+  onChange,
+  selectedMetric,
+}) => {
   const isFactors = isActive && activeTab === "factors";
   const isExplain = isActive && activeTab === "explain";
   const metricKey = selectedMetric?.toLowerCase();
   const shouldShowMetric =
-    metricKey && metricKey !== "balanced" && supplier.scores?.[metricKey] != null;
+    metricKey &&
+    metricKey !== "balanced" &&
+    supplier.scores?.[metricKey] != null;
   const displayScore = shouldShowMetric
     ? `${(supplier.scores[metricKey] / 10).toFixed(1)} / 10`
     : supplier.rating;
@@ -1009,12 +1276,14 @@ const SupplierCard = ({ supplier, isActive, activeTab, onChange, selectedMetric 
           gap: 1,
         }}
       >
-        {(supplier.icons ||
+        {(
+          supplier.icons ||
           ICON_DEFINITIONS.map(({ key, Component }) => ({
             key,
             Component,
             color: COLORS.green600,
-          }))).map(({ key, Component, color }) => (
+          }))
+        ).map(({ key, Component, color }) => (
           <Component key={key} color={color || COLORS.green600} size={22} />
         ))}
       </Box>
@@ -1207,7 +1476,9 @@ const ScoreConfigSidebar = ({ open, values, onChange, onClose }) => {
         >
           <Stack direction="row" spacing={1} alignItems="center">
             <SettingsIcon sx={{ fontSize: 18, color: COLORS.gray600 }} />
-            <Typography sx={{ fontSize: 13, fontWeight: 500, color: COLORS.gray700 }}>
+            <Typography
+              sx={{ fontSize: 13, fontWeight: 500, color: COLORS.gray700 }}
+            >
               Weighted Score Configuration
             </Typography>
           </Stack>
@@ -1261,7 +1532,10 @@ const ScoreConfigSidebar = ({ open, values, onChange, onClose }) => {
                           sx={{
                             m: 0,
                             ml: 0.25,
-                            ".MuiTypography-root": { fontSize: 12, lineHeight: 1 },
+                            ".MuiTypography-root": {
+                              fontSize: 12,
+                              lineHeight: 1,
+                            },
                           }}
                         >
                           %
@@ -1339,10 +1613,114 @@ export default function Scorecard() {
     compliance: 100,
   });
 
+  // Dynamic data for the Factors charts, grouped by metric_name
+  const [factorData, setFactorData] = useState({
+    quantity: [],
+    rubberCost: [],
+    fuelWti: [],
+    fuelBrent: [],
+    fxRate: [],
+  });
+
   const handleTabChange = (supplierId, tab) => {
     setActiveSupplier(supplierId);
     setActiveTab(tab);
   };
+
+  // Fetch all metric series for a supplier, then split by metric_name
+  useEffect(() => {
+    if (activeTab !== "factors") return;
+
+    const backendSupplierId = SUPPLIER_ID_MAP[activeSupplier];
+    if (!backendSupplierId) return;
+
+    axios
+      .post(`${API_BASE_URL}/getQuantityTrendBySupplier`, {
+        supplier_id: backendSupplierId,
+      })
+      .then((res) => {
+        const rows = Array.isArray(res.data) ? res.data : [];
+
+        const grouped = {
+          quantity: [],
+          rubberCost: [],
+          fuelWti: [],
+          fuelBrent: [],
+          fxRate: [],
+        };
+
+        // 1) First group non–raw-material metrics normally
+        rows.forEach((row) => {
+          switch (row.metric_name) {
+            case "Quantity":
+              grouped.quantity.push(row);
+              break;
+
+            case "Fuel Cost (WTI)":
+              grouped.fuelWti.push(row);
+              break;
+
+            case "Fuel Cost (Brent)":
+              grouped.fuelBrent.push(row);
+              break;
+
+            case "Exchange Rate Dollar/Euro":
+              grouped.fxRate.push(row);
+              break;
+
+            default:
+              // raw materials and other metrics handled below
+              break;
+          }
+        });
+
+        // 2) Combine ALL raw-material metrics (3 types) into one series
+        //    Any metric_name that starts with "Raw Material -" will be included
+        const rawMaterialMap = new Map();
+
+        rows.forEach((row) => {
+          if (!row.metric_name?.startsWith("Raw Material -")) return;
+
+          const key = row.date_value; // group by date
+          const y = Number(row.y_value ?? 0);
+
+          if (!rawMaterialMap.has(key)) {
+            rawMaterialMap.set(key, {
+              date_value: row.date_value,
+              y_value: y,
+              is_forecast: !!row.is_forecast,
+              metric_name: "Raw Material - Combined",
+            });
+          } else {
+            const existing = rawMaterialMap.get(key);
+            existing.y_value += y;
+            // mark as forecast if any of the components is forecast
+            existing.is_forecast = existing.is_forecast || !!row.is_forecast;
+          }
+        });
+
+        grouped.rubberCost = Array.from(rawMaterialMap.values());
+
+        // 3) Sort each series by date
+        Object.keys(grouped).forEach((key) => {
+          grouped[key].sort(
+            (a, b) => new Date(a.date_value) - new Date(b.date_value)
+          );
+        });
+
+        setFactorData(grouped);
+      })
+      .catch((err) => {
+        console.error("Error fetching factor trends", err);
+        setFactorData({
+          quantity: [],
+          rubberCost: [],
+          fuelWti: [],
+          fuelBrent: [],
+          fxRate: [],
+        });
+      });
+  }, [activeSupplier, activeTab]);
 
   const explainabilityData = [
     {
@@ -1439,35 +1817,45 @@ export default function Scorecard() {
       <Box sx={{ mt: 3 }}>
         {activeTab === "factors" ? (
           <Stack direction="row" spacing={1.5}>
+            {/* Quantity */}
             <FactorCard
               title="Quantity"
               color="#22C55E"
               gradient="g1"
               yLabels={[3200, 1600, 0]}
+              data={factorData.quantity}
             />
+            {/* Raw Material - Rubber / Polymer Cost */}
             <FactorCard
               title="Raw Material - Rubber / Polymer Cost in ($)"
               color="#FB923C"
               gradient="g2"
               yLabels={[100, 50, 0]}
+              data={factorData.rubberCost}
             />
+            {/* Fuel Cost (WTI) */}
             <FactorCard
               title="Fuel Cost (WTI) in $"
               color="#60A5FA"
               gradient="g3"
               yLabels={[100, 50, 0]}
+              data={factorData.fuelWti}
             />
+            {/* Fuel Cost (Brent) */}
             <FactorCard
               title="Fuel Cost (Brent) in $"
               color="#818CF8"
               gradient="g4"
               yLabels={[100, 50, 0]}
+              data={factorData.fuelBrent}
             />
+            {/* Exchange Rate */}
             <FactorCard
               title="Exchange Rate Dollar/Euro"
               color="#C084FC"
               gradient="g5"
               yLabels={[1.3, 1.1, 0]}
+              data={factorData.fxRate}
             />
           </Stack>
         ) : (
