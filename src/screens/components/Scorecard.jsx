@@ -619,9 +619,19 @@ const SUPPLIERS = [
 
 // map UI supplier -> backend supplier_id
 const SUPPLIER_ID_MAP = {
-  gpi: 7, // matches your example payload
-  gumby: 8, // adjust as per your DB
-  bharat: 9, // adjust as per your DB
+  gpi: 7,
+  bharat: 8,
+  gumby: 9,
+};
+
+const EXPLAINABILITY_SECTION_COLORS = {
+  "Quantity": "#22C55E",
+  "Raw Material - Rubber / Polymer Cost in ($)": "#FB923C",
+  "Fuel Cost (WTI) in $": "#60A5FA",
+  "Fuel Cost (Brent) in $": "#818CF8",
+  "Exchange Rate Dollar/Euro": "#C084FC",
+  "Exchange Rate Dollar/Yuan": "#C084FC",
+  "Exchange Rate Dollar/Rupee": "#C084FC",
 };
 
 /* -------------------------------------------------
@@ -636,6 +646,18 @@ const ExplainabilityCard = ({ title, color, factors }) => {
     "#C084FC": "#F3E8FF", // purple
   };
   const bgColor = backgroundMap[color] || `${color}1A`;
+  const numericValues =
+    Array.isArray(factors) && factors.length
+      ? factors.map((f) => Number(f.value) || 0)
+      : [0];
+  const maxValue = Math.max(...numericValues);
+  const scaleMax = maxValue > 100 ? 200 : 100;
+  const axisLabels = [0, scaleMax / 2, scaleMax];
+  const getWidthPercent = (val) => {
+    const num = Number(val) || 0;
+    const pct = (num / scaleMax) * 100;
+    return `${Math.min(Math.max(pct, 0), 100)}%`;
+  };
 
   return (
     <Paper
@@ -735,7 +757,7 @@ const ExplainabilityCard = ({ title, color, factors }) => {
                     left: 0,
                     top: 0,
                     bottom: 0,
-                    width: `${f.value}%`,
+                    width: getWidthPercent(f.value),
                     backgroundColor: color,
                     transition: "width 0.4s ease",
                   }}
@@ -770,7 +792,7 @@ const ExplainabilityCard = ({ title, color, factors }) => {
           color: "#94A3B8",
         }}
       >
-        {[0, 50, 100].map((v) => (
+        {axisLabels.map((v) => (
           <Typography key={v} sx={{ fontSize: 11 }}>
             {v}
           </Typography>
@@ -1621,6 +1643,8 @@ export default function Scorecard() {
     fuelBrent: [],
     fxRate: [],
   });
+  const [explainabilityData, setExplainabilityData] = useState([]);
+  const [explainabilityLoading, setExplainabilityLoading] = useState(false);
 
   const handleTabChange = (supplierId, tab) => {
     setActiveSupplier(supplierId);
@@ -1634,10 +1658,13 @@ export default function Scorecard() {
     const backendSupplierId = SUPPLIER_ID_MAP[activeSupplier];
     if (!backendSupplierId) return;
 
+    const controller = new AbortController();
+
     axios
-      .post(`${API_BASE_URL}/getQuantityTrendBySupplier`, {
-        supplier_id: backendSupplierId,
-      })
+      .get(
+        `${API_BASE_URL}/suppliers/${backendSupplierId}/market-metric-trends`,
+        { signal: controller.signal }
+      )
       .then((res) => {
         const rows = Array.isArray(res.data) ? res.data : [];
 
@@ -1651,16 +1678,19 @@ export default function Scorecard() {
 
         // 1) First group non–raw-material metrics normally
         rows.forEach((row) => {
-          switch (row.metric_name) {
+          const metric = row.metric_name || "";
+          switch (metric) {
             case "Quantity":
               grouped.quantity.push(row);
               break;
 
             case "Fuel Cost (WTI)":
+            case "Fuel Cost (WTI) in $":
               grouped.fuelWti.push(row);
               break;
 
             case "Fuel Cost (Brent)":
+            case "Fuel Cost (Brent) in $":
               grouped.fuelBrent.push(row);
               break;
 
@@ -1720,60 +1750,74 @@ export default function Scorecard() {
           fxRate: [],
         });
       });
+
+    return () => controller.abort();
   }, [activeSupplier, activeTab]);
 
-  const explainabilityData = [
-    {
-      title: "Quantity",
-      color: "#22C55E",
-      factors: [
-        { label: "PPI", value: 80 },
-        { label: "Promotion", value: 70 },
-        { label: "CPI", value: 60 },
-        { label: "Seasonality", value: 50 },
-      ],
-    },
-    {
-      title: "Raw Material - Rubber / Polymer Cost in ($)",
-      color: "#FB923C",
-      factors: [
-        { label: "Temperature", value: 65 },
-        { label: "PPI", value: 80 },
-        { label: "Seasonality", value: 70 },
-        { label: "CPI", value: 50 },
-      ],
-    },
-    {
-      title: "Fuel Cost (WTI) in $",
-      color: "#60A5FA",
-      factors: [
-        { label: "OPEC", value: 90 },
-        { label: "CPI", value: 75 },
-        { label: "PPI", value: 70 },
-        { label: "Weather", value: 50 },
-      ],
-    },
-    {
-      title: "Fuel Cost (Brent) in $",
-      color: "#818CF8",
-      factors: [
-        { label: "OPEC", value: 85 },
-        { label: "CPI", value: 70 },
-        { label: "PPI", value: 65 },
-        { label: "Seasonality", value: 45 },
-      ],
-    },
-    {
-      title: "Exchange Rate Dollar/Euro",
-      color: "#C084FC",
-      factors: [
-        { label: "PPI", value: 90 },
-        { label: "Interest Rate", value: 85 },
-        { label: "CPI", value: 75 },
-        { label: "Seasonality", value: 35 },
-      ],
-    },
-  ];
+  useEffect(() => {
+    if (activeTab !== "explain") return;
+    const backendSupplierId = SUPPLIER_ID_MAP[activeSupplier];
+    if (!backendSupplierId) return;
+
+    const controller = new AbortController();
+    setExplainabilityLoading(true);
+    axios
+      .get(
+        `${API_BASE_URL}/forecast-explainability/${backendSupplierId}`,
+        { signal: controller.signal }
+      )
+      .then((res) => {
+        const rows = Array.isArray(res.data) ? res.data : [];
+        const grouped = rows.reduce((acc, row) => {
+          const section =
+            row.chart_section ||
+            row.category ||
+            "Quantity";
+          if (!acc[section]) acc[section] = [];
+          acc[section].push({
+            label: row.factor_name,
+            value: Number(row.factor_value ?? 0),
+          });
+          return acc;
+        }, {});
+
+        const preferredOrder = [
+          "Quantity",
+          "Raw Material - Rubber / Polymer Cost in ($)",
+          "Fuel Cost (WTI) in $",
+          "Fuel Cost (Brent) in $",
+          "Exchange Rate Dollar/Euro",
+          "Exchange Rate Dollar/Yuan",
+          "Exchange Rate Dollar/Rupee",
+        ];
+
+        const orderedSections = [
+          ...preferredOrder.filter((s) => grouped[s]),
+          ...Object.keys(grouped).filter(
+            (section) => !preferredOrder.includes(section)
+          ),
+        ];
+
+        const cards = orderedSections.map((section) => ({
+          title: section,
+          color: EXPLAINABILITY_SECTION_COLORS[section] || COLORS.blue600,
+          factors: grouped[section]
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 4),
+        }));
+
+        setExplainabilityData(cards);
+      })
+      .catch((err) => {
+        if (!axios.isCancel(err)) {
+          console.error("Error fetching explainability data", err);
+          setExplainabilityData([]);
+        }
+      })
+      .finally(() => setExplainabilityLoading(false));
+
+    return () => controller.abort();
+  }, [activeTab, activeSupplier]);
 
   return (
     <Box
@@ -1860,14 +1904,24 @@ export default function Scorecard() {
           </Stack>
         ) : (
           <Stack direction="row" spacing={1.5}>
-            {explainabilityData.map((e, i) => (
-              <ExplainabilityCard
-                key={i}
-                title={e.title}
-                color={e.color}
-                factors={e.factors}
-              />
-            ))}
+            {explainabilityLoading ? (
+              <Typography sx={{ color: COLORS.gray600 }}>
+                Loading explainability...
+              </Typography>
+            ) : explainabilityData.length ? (
+              explainabilityData.map((e, i) => (
+                <ExplainabilityCard
+                  key={`${e.title}-${i}`}
+                  title={e.title}
+                  color={e.color}
+                  factors={e.factors}
+                />
+              ))
+            ) : (
+              <Typography sx={{ color: COLORS.gray600 }}>
+                No explainability data.
+              </Typography>
+            )}
           </Stack>
         )}
       </Box>

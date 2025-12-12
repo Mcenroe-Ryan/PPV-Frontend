@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import axios from "axios";
 import {
   Box,
@@ -16,12 +16,15 @@ import {
   IconButton,
   Dialog,
 } from "@mui/material";
+import { Drawer, Divider, Stack, Popover, Button } from "@mui/material";
 import FullscreenIcon from "@mui/icons-material/Fullscreen";
 import FullscreenExitIcon from "@mui/icons-material/FullscreenExit";
-import GridViewIcon from "@mui/icons-material/GridView";
 import DownloadIcon from "@mui/icons-material/Download";
 import ShareIcon from "@mui/icons-material/Share";
 import SettingsIcon from "@mui/icons-material/Settings";
+import CloseIcon from "@mui/icons-material/Close";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -51,6 +54,89 @@ const COLOR_CARD_BORDER = "#E5E7EB";
 const COLOR_TABLE_HEAD_BG = "#F8FAFC";
 const COLOR_TABLE_SUBHEAD_BG = "#F1F5F9";
 const FONT_MONO = "'Poppins', sans-serif";
+const DEFAULT_SAQ_SERIES_COLORS = {
+  standard: COLOR_STANDARD,
+  actual: COLOR_ACTUAL,
+  quantity: COLOR_QUANTITY,
+};
+const hexToRgba = (hex, alpha = 1) => {
+  if (!hex) return `rgba(0,0,0,${alpha})`;
+  let parsed = hex.replace("#", "");
+  if (parsed.length === 3) {
+    parsed = parsed
+      .split("")
+      .map((c) => c + c)
+      .join("");
+  }
+  const bigint = parseInt(parsed, 16);
+  const r = (bigint >> 16) & 255;
+  const g = (bigint >> 8) & 255;
+  const b = bigint & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+const hexToHsv = (hex) => {
+  let parsed = (hex || "#000000").replace("#", "");
+  if (parsed.length === 3) {
+    parsed = parsed
+      .split("")
+      .map((c) => c + c)
+      .join("");
+  }
+  const r = parseInt(parsed.slice(0, 2), 16) / 255;
+  const g = parseInt(parsed.slice(2, 4), 16) / 255;
+  const b = parseInt(parsed.slice(4, 6), 16) / 255;
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+
+  let h = 0;
+  if (delta !== 0) {
+    if (max === r) h = ((g - b) / delta) % 6;
+    else if (max === g) h = (b - r) / delta + 2;
+    else h = (r - g) / delta + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  const s = max === 0 ? 0 : delta / max;
+  const v = max;
+  return { h, s, v };
+};
+
+const hsvToHex = ({ h, s, v }) => {
+  const c = v * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = v - c;
+  let r = 0;
+  let g = 0;
+  let b = 0;
+
+  if (h >= 0 && h < 60) {
+    r = c;
+    g = x;
+  } else if (h >= 60 && h < 120) {
+    r = x;
+    g = c;
+  } else if (h >= 120 && h < 180) {
+    g = c;
+    b = x;
+  } else if (h >= 180 && h < 240) {
+    g = x;
+    b = c;
+  } else if (h >= 240 && h < 300) {
+    r = x;
+    b = c;
+  } else {
+    r = c;
+    b = x;
+  }
+
+  const toHex = (value) =>
+    Math.round((value + m) * 255)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+};
 
 /**
  * Default SAQ filter values when parent doesn't pass anything
@@ -83,6 +169,7 @@ const yearNum = (iso) => new Date(iso).getFullYear();
 
 function ForecastBarShape({ x, y, width, height, fill }) {
   if (height <= 0 || !Number.isFinite(height)) return null;
+  const strokeColor = fill || COLOR_FORECAST_BAR_STROKE;
   return (
     <rect
       x={x}
@@ -93,7 +180,7 @@ function ForecastBarShape({ x, y, width, height, fill }) {
       ry={6}
       fill={fill}
       fillOpacity={0.15}
-      stroke={COLOR_FORECAST_BAR_STROKE}
+      stroke={strokeColor}
       strokeWidth={1.5}
       strokeDasharray="4 4"
     />
@@ -149,6 +236,66 @@ const formatXAxisLabel = (d, idx, arr) => {
   return `${d.monthShort} ${yearShort}`;
 };
 
+const TOOLTIP_ORDER = {
+  "Actual Price": 0,
+  "Standard Price": 1,
+  Quantity: 2,
+};
+
+const ChartTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  const seen = new Set();
+  const uniquePayload = [];
+  payload.forEach((item) => {
+    const key = item?.name;
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    uniquePayload.push(item);
+  });
+  uniquePayload.sort((a, b) => {
+    const orderA = TOOLTIP_ORDER.hasOwnProperty(a.name)
+      ? TOOLTIP_ORDER[a.name]
+      : 99;
+    const orderB = TOOLTIP_ORDER.hasOwnProperty(b.name)
+      ? TOOLTIP_ORDER[b.name]
+      : 99;
+    return orderA - orderB;
+  });
+
+  return (
+    <Box
+      sx={{
+        p: 1.2,
+        borderRadius: 1.5,
+        border: `1px solid ${COLOR_CARD_BORDER}`,
+        backgroundColor: "#fff",
+        minWidth: 170,
+      }}
+    >
+      <Typography sx={{ fontWeight: 600, mb: 0.5, color: COLOR_TEXT }}>
+        {label}
+      </Typography>
+      {uniquePayload.map((item) => (
+        <Typography
+          key={item.name}
+          sx={{
+            fontSize: "0.8rem",
+            lineHeight: 1.4,
+            color: item.color || item.stroke || COLOR_TEXT,
+          }}
+        >
+          {item.name}:{" "}
+          <strong>
+            {typeof item.value === "number"
+              ? item.value.toLocaleString("en-US", { maximumFractionDigits: 2 })
+              : item.value}
+          </strong>
+        </Typography>
+      ))}
+    </Box>
+  );
+};
+
 /* ==============================  MAIN COMPONENT  =========================== */
 
 export default function SAQ({
@@ -160,15 +307,176 @@ export default function SAQ({
   countryIds,
   stateIds,
 }) {
-  const [gran, setGran] = useState("m");
+  const [gran] = useState("m");
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
 
   const [showStandard, setShowStandard] = useState(true);
+  const [showStandardForecast, setShowStandardForecast] = useState(true);
   const [showActual, setShowActual] = useState(true);
-  const [showQuantity, setShowQuantity] = useState(true);
+  const [showActualForecast, setShowActualForecast] = useState(true);
+  const [showQuantity, setShowQuantity] = useState(true); // actual quantity
+  const [showQuantityForecast, setShowQuantityForecast] = useState(true);
 
   const [fullscreen, setFullscreen] = useState(false);
+  const [downloadingChart, setDownloadingChart] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [seriesColors, setSeriesColors] = useState(
+    DEFAULT_SAQ_SERIES_COLORS
+  );
+
+  const baseLineStyle = useRef({
+    strokeWidth: 2.6,
+    dot: false,
+    strokeLinecap: "round",
+  }).current;
+
+  const buildActiveDot = (color) => ({
+    stroke: color,
+    strokeWidth: 2,
+    fill: "#fff",
+    r: 4.5,
+  });
+  const HUE_SLIDER_HEIGHT = 140;
+  const [colorPicker, setColorPicker] = useState({
+    open: false,
+    key: "",
+    anchorEl: null,
+    hsv: { h: 0, s: 0, v: 1 },
+  });
+  const handleColorSwatchClick = (key) => (event) => {
+    const current = seriesColors[key];
+    setColorPicker({
+      open: true,
+      key,
+      anchorEl: event.currentTarget,
+      hsv: hexToHsv(current),
+    });
+  };
+  const closeColorPicker = () =>
+    setColorPicker((prev) => ({ ...prev, open: false, anchorEl: null }));
+  const colorPickerLabel = useMemo(() => {
+    if (!colorPicker.key) return "Series";
+    switch (colorPicker.key) {
+      case "standard":
+        return "Standard Price";
+      case "actual":
+        return "Actual Price";
+      case "quantity":
+        return "Quantity";
+      default:
+        return "Series";
+    }
+  }, [colorPicker.key]);
+  const colorPopoverHex = useMemo(
+    () => hsvToHex(colorPicker.hsv),
+    [colorPicker.hsv]
+  );
+  const huePreviewHex = useMemo(
+    () => hsvToHex({ h: colorPicker.hsv.h, s: 1, v: 1 }),
+    [colorPicker.hsv.h]
+  );
+  const satPointerLeft = `${Math.min(Math.max(colorPicker.hsv.s, 0), 1) * 100}%`;
+  const satPointerTop = `${
+    (1 - Math.min(Math.max(colorPicker.hsv.v, 0), 1)) * 100
+  }%`;
+  const normalizedHue = ((colorPicker.hsv.h % 360) + 360) % 360 || 0;
+  const huePointerTopPx = useMemo(() => {
+    const ratio = Math.max(0, Math.min(1, normalizedHue / 360));
+    return ratio * HUE_SLIDER_HEIGHT;
+  }, [normalizedHue]);
+  const satRef = useRef(null);
+  const hueRef = useRef(null);
+  const dragState = useRef({ mode: null });
+  const chartCaptureRef = useRef(null);
+  const applyPickedColor = (nextHsv, target = colorPicker) => {
+    const hex = hsvToHex(nextHsv);
+    setSeriesColors((prev) => ({ ...prev, [target.key]: hex }));
+  };
+  const beginDrag = (mode) => {
+    dragState.current = { mode };
+  };
+  const stopDrag = () => {
+    dragState.current = { mode: null };
+  };
+  const normalizePointerEvent = (event) =>
+    event?.touches?.[0] || event?.changedTouches?.[0] || event;
+  const updateSatFromEvent = (event) => {
+    if (!satRef.current) return;
+    const point = normalizePointerEvent(event);
+    if (!point) return;
+    const rect = satRef.current.getBoundingClientRect();
+    const x = Math.min(Math.max(0, point.clientX - rect.left), rect.width);
+    const y = Math.min(Math.max(0, point.clientY - rect.top), rect.height);
+    const s = x / rect.width;
+    const v = 1 - y / rect.height;
+    setColorPicker((prev) => {
+      const hsv = { ...prev.hsv, s, v };
+      applyPickedColor(hsv, prev);
+      return { ...prev, hsv };
+    });
+  };
+  const updateHueFromEvent = (event) => {
+    if (!hueRef.current) return;
+    const point = normalizePointerEvent(event);
+    if (!point) return;
+    const rect = hueRef.current.getBoundingClientRect();
+    const sliderHeight = rect.height || HUE_SLIDER_HEIGHT;
+    const offset = point.clientY - rect.top;
+    const y = Math.min(Math.max(0, offset), sliderHeight);
+    const h = Math.min(359.999, Math.max(0, (y / sliderHeight) * 360));
+    setColorPicker((prev) => {
+      const hsv = { ...prev.hsv, h };
+      applyPickedColor(hsv, prev);
+      return { ...prev, hsv };
+    });
+  };
+  useEffect(() => {
+    const handleMove = (event) => {
+      if (dragState.current.mode === "sat") updateSatFromEvent(event);
+      else if (dragState.current.mode === "hue") updateHueFromEvent(event);
+    };
+    const handleUp = () => stopDrag();
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+    window.addEventListener("touchmove", handleMove);
+    window.addEventListener("touchend", handleUp);
+    window.addEventListener("touchcancel", handleUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+      window.removeEventListener("touchmove", handleMove);
+      window.removeEventListener("touchend", handleUp);
+      window.removeEventListener("touchcancel", handleUp);
+    };
+  }, []);
+  useEffect(() => {
+    if (!colorPicker.open) stopDrag();
+  }, [colorPicker.open]);
+
+  const handleDownloadChart = async () => {
+    if (!chartCaptureRef.current || downloadingChart) return;
+    try {
+      setDownloadingChart(true);
+      const canvas = await html2canvas(chartCaptureRef.current, {
+        backgroundColor: "#ffffff",
+        scale: window.devicePixelRatio ? Math.min(window.devicePixelRatio, 2) : 2,
+      });
+      const imgData = canvas.toDataURL("image/png");
+      const orientation = canvas.width >= canvas.height ? "l" : "p";
+      const pdf = new jsPDF({
+        orientation,
+        unit: "px",
+        format: [canvas.width, canvas.height],
+      });
+      pdf.addImage(imgData, "PNG", 0, 0, canvas.width, canvas.height);
+      pdf.save("saq-chart.pdf");
+    } catch (error) {
+      console.error("Failed to download SAQ chart", error);
+    } finally {
+      setDownloadingChart(false);
+    }
+  };
 
   /* =======================  EFFECTIVE FILTERS (WITH DEFAULTS)  ======================= */
 
@@ -414,7 +722,7 @@ export default function SAQ({
                 }}
               />
 
-              {showQuantity && (
+              {(showQuantity || showQuantityForecast) && (
                 <YAxis
                   yAxisId="right"
                   orientation="right"
@@ -447,26 +755,30 @@ export default function SAQ({
 
               <Customized component={<YearLabels yearSpans={yearSpans} />} />
 
-              {showQuantity && (
+              {(showQuantity || showQuantityForecast) && (
                 <>
-                  <Bar
-                    yAxisId="right"
-                    dataKey="quantity_hist"
-                    name="Quantity"
-                    fill={COLOR_QUANTITY}
-                    barSize={18}
-                    radius={[6, 6, 0, 0]}
-                    stackId="qty"
-                  />
-                  <Bar
-                    yAxisId="right"
-                    dataKey="quantity_fore"
-                    name="Quantity"
-                    fill={COLOR_QUANTITY}
-                    barSize={18}
-                    shape={<ForecastBarShape />}
-                    stackId="qty"
-                  />
+                  {showQuantity && (
+                    <Bar
+                      yAxisId="right"
+                      dataKey="quantity_hist"
+                      name="Quantity"
+                      fill={seriesColors.quantity}
+                      barSize={18}
+                      radius={[6, 6, 0, 0]}
+                      stackId="qty"
+                    />
+                  )}
+                  {showQuantityForecast && (
+                    <Bar
+                      yAxisId="right"
+                      dataKey="quantity_fore"
+                      name="Quantity Forecast"
+                      fill={seriesColors.quantity}
+                      barSize={18}
+                      shape={<ForecastBarShape />}
+                      stackId="qty"
+                    />
+                  )}
                 </>
               )}
 
@@ -477,22 +789,24 @@ export default function SAQ({
                     type="linear"
                     dataKey="standard_hist"
                     name="Standard Price"
-                    stroke={COLOR_STANDARD}
-                    strokeWidth={2}
-                    dot={{ r: 2 }}
-                    connectNulls
+                    stroke={seriesColors.standard}
+                    activeDot={buildActiveDot(seriesColors.standard)}
+                    connectNulls={false}
+                    {...baseLineStyle}
                   />
-                  <Line
-                    yAxisId="left"
-                    type="linear"
-                    dataKey="standard_fore"
-                    name="Standard Price"
-                    stroke={COLOR_STANDARD}
-                    strokeWidth={2}
-                    strokeDasharray="4 4"
-                    dot={{ r: 2 }}
-                    connectNulls
-                  />
+                  {showStandardForecast && (
+                    <Line
+                      yAxisId="left"
+                      type="linear"
+                      dataKey="standard_fore"
+                      name="Standard Price Forecast"
+                      stroke={seriesColors.standard}
+                      strokeDasharray="4 4"
+                      activeDot={buildActiveDot(seriesColors.standard)}
+                      connectNulls={false}
+                      {...baseLineStyle}
+                    />
+                  )}
                 </>
               )}
 
@@ -503,33 +817,30 @@ export default function SAQ({
                     type="linear"
                     dataKey="actual_hist"
                     name="Actual Price"
-                    stroke={COLOR_ACTUAL}
-                    strokeWidth={2}
-                    dot={{ r: 2 }}
-                    connectNulls
+                    stroke={seriesColors.actual}
+                    activeDot={buildActiveDot(seriesColors.actual)}
+                    connectNulls={false}
+                    {...baseLineStyle}
                   />
-                  <Line
-                    yAxisId="left"
-                    type="linear"
-                    dataKey="actual_fore"
-                    name="Actual Price"
-                    stroke={COLOR_ACTUAL}
-                    strokeWidth={2}
-                    strokeDasharray="4 4"
-                    dot={{ r: 2 }}
-                    connectNulls
-                  />
+                  {showActualForecast && (
+                    <Line
+                      yAxisId="left"
+                      type="linear"
+                      dataKey="actual_fore"
+                      name="Actual Price Forecast"
+                      stroke={seriesColors.actual}
+                      strokeDasharray="4 4"
+                      activeDot={buildActiveDot(seriesColors.actual)}
+                      connectNulls={false}
+                      {...baseLineStyle}
+                    />
+                  )}
                 </>
               )}
 
               <Tooltip
                 cursor={{ stroke: "#E2E8F0", strokeWidth: 1 }}
-                contentStyle={{
-                  borderRadius: 8,
-                  border: `1px solid ${COLOR_CARD_BORDER}`,
-                  backgroundColor: "#F8FAFC",
-                  fontSize: "0.8rem",
-                }}
+                content={<ChartTooltip />}
               />
             </ComposedChart>
           </ResponsiveContainer>
@@ -542,34 +853,18 @@ export default function SAQ({
 
   return (
     <Box sx={{ pt: 1.3, px: 2, pb: 2, fontFamily: FONT_MONO }}>
-      {/* Granularity Pills */}
-      <Grid container alignItems="center" spacing={2} sx={{ mb: 1 }}>
-        {["W", "M", "Q"].map((label) => (
-          <Grid item key={label}>
-            <Box
-              onClick={() => setGran(label.toLowerCase())}
-              sx={{
-                border: "1.5px solid #0284C7",
-                borderRadius: "9999px",
-                px: 1.8,
-                py: 0.3,
-                minWidth: 32,
-                textAlign: "center",
-                cursor: "pointer",
-                fontWeight: 600,
-                fontSize: "0.8rem",
-                color: gran === label.toLowerCase() ? "#fff" : "#0284C7",
-                backgroundColor:
-                  gran === label.toLowerCase() ? "#0284C7" : "#fff",
-              }}
-            >
-              {label}
-            </Box>
-          </Grid>
-        ))}
-      </Grid>
+      <Typography
+        sx={{
+          fontWeight: 600,
+          fontSize: 16,
+          color: "#6b6b6b",
+          mb: 2,
+        }}
+      >
+        SAQ Monthly Performance Chart
+      </Typography>
 
-      {/* Metric Toggles + Top-right Icons */}
+      {/* Metric + Forecast legends + Top-right Icons */}
       <Box
         sx={{
           mt: 1,
@@ -581,47 +876,71 @@ export default function SAQ({
           flexWrap: "wrap",
         }}
       >
-        {/* Legend-like metric toggles (left) */}
+        {/* Legend-like metric toggles + forecast chips (left) */}
         <Box
           sx={{
             display: "flex",
-            gap: 2,
+            gap: 1.4,
             flexWrap: "wrap",
           }}
         >
           {[
             {
               label: "Standard Price ($)",
-              color: COLOR_STANDARD,
+              color: seriesColors.standard,
               active: showStandard,
               toggle: () => setShowStandard((p) => !p),
             },
             {
               label: "Actual Price ($)",
-              color: COLOR_ACTUAL,
+              color: seriesColors.actual,
               active: showActual,
               toggle: () => setShowActual((p) => !p),
             },
             {
               label: "Quantity",
-              color: COLOR_QUANTITY,
+              color: seriesColors.quantity,
               active: showQuantity,
               toggle: () => setShowQuantity((p) => !p),
             },
-          ].map((btn) => (
+            // Forecast legend chips (independent toggles)
+            ...[
+              {
+                label: "Quantity Forecast",
+                color: seriesColors.quantity,
+                active: showQuantityForecast,
+                isForecast: true,
+                toggle: () => setShowQuantityForecast((p) => !p),
+              },
+              {
+                label: "Actual Price Forecast",
+                color: seriesColors.actual,
+                active: showActualForecast,
+                isForecast: true,
+                toggle: () => setShowActualForecast((p) => !p),
+              },
+              {
+                label: "Standard Price Forecast",
+                color: seriesColors.standard,
+                active: showStandardForecast,
+                isForecast: true,
+                toggle: () => setShowStandardForecast((p) => !p),
+              },
+            ],
+          ].flat().map((btn) => (
             <Box
               key={btn.label}
               onClick={btn.toggle}
               sx={{
                 display: "flex",
                 alignItems: "center",
-                gap: 0.6,
-                px: 1,
-                py: 0.4,
-                borderRadius: "5px",
+                gap: btn.isForecast ? 0.8 : 0.6,
+                px: 1.1,
+                py: 0.55,
+                borderRadius: "10px",
                 cursor: "pointer",
-                minWidth: 90,
-                height: 24,
+                minWidth: 140,
+                height: 32,
                 backgroundColor: btn.active ? "#F8FBFF" : "#F9FAFB",
                 border: btn.active
                   ? "1px solid #D1D5DB"
@@ -634,23 +953,35 @@ export default function SAQ({
                   backgroundColor: btn.active ? "#EEF2FF" : "#F3F4F6",
                 },
                 opacity: btn.active ? 1 : 0.6,
-              }}
-            >
-              <Box
-                sx={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  backgroundColor: btn.active ? btn.color : "#D1D5DB",
-                  flexShrink: 0,
                 }}
-              />
+              >
+                {btn.isForecast ? (
+                  <Box
+                    sx={{
+                      width: 24,
+                      height: 3,
+                      backgroundImage: `repeating-linear-gradient(90deg, ${btn.active ? btn.color : "#CBD5E1"}, ${btn.active ? btn.color : "#CBD5E1"} 6px, transparent 6px, transparent 12px)`,
+                      borderRadius: "3px",
+                      flexShrink: 0,
+                    }}
+                  />
+                ) : (
+                  <Box
+                    sx={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      backgroundColor: btn.active ? btn.color : "#D1D5DB",
+                      flexShrink: 0,
+                    }}
+                  />
+                )}
               <Typography
                 variant="body2"
                 fontWeight={500}
                 sx={{
                   color: btn.active ? "#374151" : "#9CA3AF",
-                  fontSize: "0.7rem",
+                  fontSize: "0.8rem",
                   lineHeight: 1.1,
                   whiteSpace: "nowrap",
                 }}
@@ -669,10 +1000,12 @@ export default function SAQ({
             gap: 1.3,
           }}
         >
-          <IconButton size="small">
-            <GridViewIcon fontSize="small" />
-          </IconButton>
-          <IconButton size="small">
+          <IconButton
+            size="small"
+            onClick={handleDownloadChart}
+            disabled={downloadingChart}
+            aria-label="Download chart as PDF"
+          >
             <DownloadIcon
               sx={{
                 width: 20,
@@ -684,7 +1017,7 @@ export default function SAQ({
           <IconButton size="small">
             <ShareIcon fontSize="small" />
           </IconButton>
-          <IconButton size="small">
+          <IconButton size="small" onClick={() => setSettingsOpen(true)}>
             <SettingsIcon fontSize="small" />
           </IconButton>
         </Box>
@@ -701,7 +1034,7 @@ export default function SAQ({
             <FullscreenIcon fontSize="small" />
           </IconButton>
         </Box>
-        {renderChartContent()}
+        <Box ref={chartCaptureRef}>{renderChartContent()}</Box>
       </Paper>
 
       {/* Fullscreen dialog */}
@@ -842,6 +1175,245 @@ export default function SAQ({
           </Table>
         </TableContainer>
       </Paper>
+
+      <Drawer
+        anchor="right"
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        PaperProps={{
+          sx: { width: 320, p: 3 },
+        }}
+      >
+        <Stack spacing={2}>
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+          >
+            <Stack direction="row" spacing={1} alignItems="center">
+              <SettingsIcon sx={{ color: "#6b7280", fontSize: 18 }} />
+              <Typography
+                sx={{
+                  fontWeight: 700,
+                  fontSize: 16,
+                  color: "#4b5563",
+                  letterSpacing: 0.2,
+                }}
+              >
+                Graph Configuration
+              </Typography>
+            </Stack>
+            <IconButton size="small" onClick={() => setSettingsOpen(false)}>
+              <CloseIcon sx={{ color: "#6b7280", fontSize: 18 }} />
+            </IconButton>
+          </Stack>
+          <Divider />
+          <Typography
+            variant="subtitle2"
+            fontWeight={600}
+            sx={{ color: "text.secondary" }}
+          >
+            Series Colors
+          </Typography>
+          <Stack spacing={1.2}>
+            {[
+              { key: "standard", label: "Standard Price" },
+              { key: "actual", label: "Actual Price" },
+              { key: "quantity", label: "Quantity" },
+            ].map((entry) => (
+              <Box
+                key={entry.key}
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  py: 0.4,
+                }}
+              >
+                <Stack direction="row" spacing={1.2} alignItems="center">
+                  <Box
+                    sx={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: "2px",
+                      bgcolor: seriesColors[entry.key],
+                      border: "1px solid rgba(15,23,42,0.15)",
+                    }}
+                  />
+                  <Typography sx={{ fontSize: 14, color: "text.secondary" }}>
+                    {entry.label}
+                  </Typography>
+                </Stack>
+                <Box
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Change ${entry.label} color`}
+                  onClick={handleColorSwatchClick(entry.key)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      handleColorSwatchClick(entry.key)(event);
+                    }
+                  }}
+                  sx={{
+                    width: 32,
+                    height: 28,
+                    borderRadius: "8px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    bgcolor: "#f8fafc",
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.4)",
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: "6px",
+                      bgcolor: seriesColors[entry.key],
+                    }}
+                  />
+                </Box>
+              </Box>
+            ))}
+          </Stack>
+        </Stack>
+      </Drawer>
+      <Popover
+        open={colorPicker.open}
+        anchorEl={colorPicker.anchorEl}
+        onClose={closeColorPicker}
+        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+        transformOrigin={{ vertical: "top", horizontal: "left" }}
+        disableRestoreFocus
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            boxShadow:
+              "0px 16px 32px rgba(15,23,42,0.18), 0px 2px 8px rgba(15,23,42,0.12)",
+            p: 2,
+            width: 260,
+          },
+        }}
+      >
+        <Stack spacing={1.5}>
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+          >
+            <Typography
+              sx={{ fontWeight: 600, fontSize: 14, color: "text.primary" }}
+            >
+              {colorPickerLabel}
+            </Typography>
+            <Typography
+              sx={{
+                fontFamily: "JetBrains Mono, monospace",
+                fontSize: 13,
+                color: "text.secondary",
+              }}
+            >
+              {colorPopoverHex.toUpperCase()}
+            </Typography>
+          </Stack>
+          <Stack direction="row" spacing={1.5} alignItems="stretch">
+            <Box
+              ref={satRef}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                beginDrag("sat");
+                updateSatFromEvent(event);
+              }}
+              onTouchStart={(event) => {
+                event.preventDefault();
+                beginDrag("sat");
+                updateSatFromEvent(event);
+              }}
+              sx={{
+                width: 180,
+                height: 140,
+                borderRadius: "12px",
+                position: "relative",
+                background: `linear-gradient(0deg, rgba(0,0,0,1), rgba(0,0,0,0)), linear-gradient(90deg, #ffffff, ${huePreviewHex})`,
+                cursor: "crosshair",
+              }}
+            >
+              <Box
+                sx={{
+                  position: "absolute",
+                  width: 14,
+                  height: 14,
+                  borderRadius: "50%",
+                  border: "2px solid #fff",
+                  boxShadow: "0 0 6px rgba(15,23,42,0.4)",
+                  transform: "translate(-50%, -50%)",
+                  left: satPointerLeft,
+                  top: satPointerTop,
+                }}
+              />
+            </Box>
+            <Box
+              ref={hueRef}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                beginDrag("hue");
+                updateHueFromEvent(event);
+              }}
+              onTouchStart={(event) => {
+                event.preventDefault();
+                beginDrag("hue");
+                updateHueFromEvent(event);
+              }}
+              sx={{
+                width: 22,
+                height: HUE_SLIDER_HEIGHT,
+                borderRadius: "10px",
+                background:
+                  "linear-gradient(180deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)",
+                position: "relative",
+                cursor: "ns-resize",
+                border: "1px solid rgba(15,23,42,0.25)",
+              }}
+            >
+              <Box
+                sx={{
+                  position: "absolute",
+                  left: "50%",
+                  width: 18,
+                  height: 6,
+                  borderRadius: 999,
+                  border: "1px solid #fff",
+                  boxShadow: "0 1px 3px rgba(15,23,42,0.4)",
+                  transform: "translate(-50%, -50%)",
+                  top: `${huePointerTopPx}px`,
+                  bgcolor: hexToRgba(huePreviewHex, 0.9),
+                  cursor: "ns-resize",
+                }}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  beginDrag("hue");
+                  updateHueFromEvent(event);
+                }}
+                onTouchStart={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  beginDrag("hue");
+                  updateHueFromEvent(event);
+                }}
+              />
+            </Box>
+          </Stack>
+          <Stack direction="row" justifyContent="flex-end" spacing={1}>
+            <Button size="small" onClick={closeColorPicker}>
+              Done
+            </Button>
+          </Stack>
+        </Stack>
+      </Popover>
     </Box>
   );
 }

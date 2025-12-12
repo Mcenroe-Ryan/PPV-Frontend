@@ -32,6 +32,10 @@ import {
   FormControlLabel,
   Tabs,
   Tab,
+  Drawer,
+  Switch,
+  FormGroup,
+  Popover,
 } from "@mui/material";
 import {
   ChevronRight as ChevronRightIcon,
@@ -42,11 +46,25 @@ import {
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import CheckBoxIcon from "@mui/icons-material/CheckBox";
 import CheckBoxOutlineBlankIcon from "@mui/icons-material/CheckBoxOutlineBlank";
-import GridViewIcon from "@mui/icons-material/GridView";
 import DownloadIcon from "@mui/icons-material/Download";
 import ShareIcon from "@mui/icons-material/Share";
 import SettingsIcon from "@mui/icons-material/Settings";
-import { format, addMonths, subMonths, parse } from "date-fns";
+import CloseIcon from "@mui/icons-material/Close";
+import BharatLogo from "./assets/BharatSupplies.png";
+import ApolloLogo from "./assets/ApolloTyres.png";
+import AutoMechLogo from "./assets/AutoMech.png";
+import ShenZhenLogo from "./assets/ShenZhen.png";
+import ShanghaiLogo from "./assets/Shanghai.png";
+import GlobalPartsLogo from "./assets/GlobalParts.png";
+import {
+  format,
+  addMonths,
+  subMonths,
+  parse,
+  addWeeks,
+  startOfWeek,
+  isValid,
+} from "date-fns";
 import DateFilter from "./components/DateFilter";
 import ChatBot from "./components/Chatbox";
 import SAQ from "./components/SAQ";
@@ -56,8 +74,118 @@ import Chart from "./components/Messaging";
 import Highcharts from "highcharts";
 import HighchartsReact from "highcharts-react-official";
 import Scorecard from "./components/Scorecard";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL;
+
+const hexToRgba = (hex, alpha = 1) => {
+  if (!hex) return `rgba(0,0,0,${alpha})`;
+  let parsed = hex.replace("#", "");
+  if (parsed.length === 3) {
+    parsed = parsed
+      .split("")
+      .map((c) => c + c)
+      .join("");
+  }
+  const bigint = parseInt(parsed, 16);
+  const r = (bigint >> 16) & 255;
+  const g = (bigint >> 8) & 255;
+  const b = bigint & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+const DEFAULT_SERIES_COLORS = {
+  "Apollo Tyres": "#9333ea",
+  "Global Parts Inc.": "#22c55e",
+  "AutoMech Gumby": "#60a5fa",
+  "Bharat Supplies": "#eab308",
+  "Shanghai Xiongda": "#ef4444",
+  "ShenZhen Nova": "#ff7ab8",
+};
+const SERIES_ORDER = Object.keys(DEFAULT_SERIES_COLORS);
+const DEFAULT_OVERLAY_COLORS = {
+  globalEvents: "#E0670C",
+  alerts: "#ef4444",
+};
+const OVERLAY_COLOR_ORDER = ["globalEvents", "alerts"];
+const OVERLAY_LABELS = {
+  globalEvents: "Global Events",
+  alerts: "Alerts",
+};
+
+const hexToHsv = (hex) => {
+  let parsed = (hex || "#000000").replace("#", "");
+  if (parsed.length === 3) {
+    parsed = parsed
+      .split("")
+      .map((c) => c + c)
+      .join("");
+  }
+  const r = parseInt(parsed.slice(0, 2), 16) / 255;
+  const g = parseInt(parsed.slice(2, 4), 16) / 255;
+  const b = parseInt(parsed.slice(4, 6), 16) / 255;
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+
+  let h = 0;
+  if (delta !== 0) {
+    if (max === r) h = ((g - b) / delta) % 6;
+    else if (max === g) h = (b - r) / delta + 2;
+    else h = (r - g) / delta + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  const s = max === 0 ? 0 : delta / max;
+  const v = max;
+  return { h, s, v };
+};
+
+const hsvToHex = ({ h, s, v }) => {
+  const c = v * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = v - c;
+  let r = 0;
+  let g = 0;
+  let b = 0;
+
+  if (h >= 0 && h < 60) {
+    r = c;
+    g = x;
+  } else if (h >= 60 && h < 120) {
+    r = x;
+    g = c;
+  } else if (h >= 120 && h < 180) {
+    g = c;
+    b = x;
+  } else if (h >= 180 && h < 240) {
+    g = x;
+    b = c;
+  } else if (h >= 240 && h < 300) {
+    r = x;
+    b = c;
+  } else {
+    r = c;
+    b = x;
+  }
+
+  const toHex = (value) =>
+    Math.round((value + m) * 255)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+};
+
+const FALLBACK_COLORS = [
+  "#0ea5e9",
+  "#ec4899",
+  "#7c3aed",
+  "#10b981",
+  "#f97316",
+  "#14b8a6",
+];
 /* ===================== Simple listbox for More menu ===================== */
 
 const Listbox = () => {
@@ -138,18 +266,18 @@ const SAVINGS_SUPPLIER_DATA = [
       {
         id: 1,
         name: "Bharat Supplier",
-        logoUrl: "https://via.placeholder.com/30",
+        logoUrl: BharatLogo,
         savings: "$1763.99",
         isPositive: true,
-        isChecked: true,
+        highlight: true,
       },
       {
         id: 2,
         name: "Apollo Tyres",
-        logoUrl: "https://via.placeholder.com/30",
+        logoUrl: ApolloLogo,
         savings: "$1263",
         isPositive: true,
-        isChecked: false,
+        highlight: false,
       },
     ],
   },
@@ -160,15 +288,15 @@ const SAVINGS_SUPPLIER_DATA = [
       {
         id: 3,
         name: "AutoMech Gumby",
-        logoUrl: "https://via.placeholder.com/30",
+        logoUrl: AutoMechLogo,
         savings: "-$9.02",
         isPositive: false,
-        isChecked: true,
+        highlight: true,
       },
       {
         id: 4,
         name: "ShenZhen Nova",
-        logoUrl: "https://via.placeholder.com/30",
+        logoUrl: ShenZhenLogo,
         savings: "-$20.75",
         isPositive: false,
         isChecked: false,
@@ -176,7 +304,7 @@ const SAVINGS_SUPPLIER_DATA = [
       {
         id: 5,
         name: "Shanghai Xiongda",
-        logoUrl: "https://via.placeholder.com/30",
+        logoUrl: ShanghaiLogo,
         savings: "-$18.46",
         isPositive: false,
         isChecked: false,
@@ -190,10 +318,10 @@ const SAVINGS_SUPPLIER_DATA = [
       {
         id: 6,
         name: "Global Parts Inc.",
-        logoUrl: "https://via.placeholder.com/30",
+        logoUrl: GlobalPartsLogo,
         savings: "$3216.34",
         isPositive: true,
-        isChecked: true,
+        highlight: true,
       },
     ],
   },
@@ -240,17 +368,7 @@ function SavingsBySupplier() {
     sortSuppliersBySavings(SAVINGS_SUPPLIER_DATA)
   );
 
-  const handleCheckboxChange = (countryIndex, supplierIndex) => {
-    setSuppliers((prev) => {
-      const next = prev.map((c) => ({
-        ...c,
-        suppliers: c.suppliers.map((s) => ({ ...s })),
-      }));
-      next[countryIndex].suppliers[supplierIndex].isChecked =
-        !next[countryIndex].suppliers[supplierIndex].isChecked;
-      return next;
-    });
-  };
+  const handleCheckboxChange = () => {};
 
   return (
     <Box
@@ -268,9 +386,9 @@ function SavingsBySupplier() {
           color: "text.secondary",
           mb: "15px",
         }}
-      >
-        Savings by supplier in $
-      </Typography>
+              >
+                Savings by supplier in $
+              </Typography>
 
       <Stack
         direction="row"
@@ -311,27 +429,33 @@ function SavingsBySupplier() {
                   alignItems: "center",
                   justifyContent: "space-between",
                   p: "5px",
-                  bgcolor: supplier.isChecked ? "#E0F2FE" : "transparent",
                   borderRadius: "5px",
-                  border: supplier.isChecked ? 1 : 0,
-                  borderColor: supplier.isChecked ? "#7DD3FC" : "transparent",
                 }}
               >
-                <Stack direction="row" spacing={1.25} alignItems="center">
-                  <Checkbox
-                    checked={supplier.isChecked}
-                    onChange={() =>
-                      handleCheckboxChange(countryIndex, supplierIndex)
-                    }
-                    icon={<CheckBoxOutlineBlankIcon />}
-                    checkedIcon={<CheckBoxIcon />}
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Box
                     sx={{
-                      p: "5px",
-                      "& .MuiSvgIcon-root": {
-                        fontSize: 16,
-                      },
+                      width: 18,
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
                     }}
-                  />
+                  >
+                    {supplier.highlight ? (
+                      <Typography
+                        sx={{
+                          color: "#facc15",
+                          fontSize: 16,
+                          fontWeight: 700,
+                          lineHeight: 1,
+                        }}
+                      >
+                        ★
+                      </Typography>
+                    ) : (
+                      <Box sx={{ width: 12, height: 12 }} />
+                    )}
+                  </Box>
                   <Avatar
                     src={supplier.logoUrl}
                     alt={supplier.name}
@@ -558,6 +682,12 @@ function MultiSelectWithCheckboxes({
               const val = option[optionKey];
               const isSelected = selected.includes(val);
               const isInactive = single && selected.length === 1 && !isSelected;
+              const optionLabel = option[displayKey || optionKey];
+              const starSuppliers = ["global parts inc.", "automech gumby", "bharat supplies"];
+              const showStar =
+                label === "Supplier Name" &&
+                typeof optionLabel === "string" &&
+                starSuppliers.includes(optionLabel.toLowerCase());
 
               return (
                 <MenuItem
@@ -571,7 +701,29 @@ function MultiSelectWithCheckboxes({
                   }}
                 >
                   <Checkbox checked={isSelected} disabled={isInactive} />
-                  <ListItemText primary={option[displayKey || optionKey]} />
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      width: "100%",
+                      gap: 1,
+                    }}
+                  >
+                    <ListItemText primary={optionLabel} />
+                    {showStar && (
+                      <Typography
+                        sx={{
+                          color: "#facc15",
+                          fontSize: 16,
+                          fontWeight: 700,
+                          lineHeight: 1,
+                        }}
+                      >
+                        ★
+                      </Typography>
+                    )}
+                  </Box>
                 </MenuItem>
               );
             }),
@@ -606,9 +758,102 @@ const DataVisualizationSection = ({
   const [lineSeries, setLineSeries] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
 
-  const [showForecast, setShowForecast] = useState(true);
+  const [showForecast, setShowForecast] = useState(false);
   const [showAlerts, setShowAlerts] = useState(false);
   const [showGlobal, setShowGlobal] = useState(false);
+  const [configOpen, setConfigOpen] = useState(false);
+  const [showGridLines, setShowGridLines] = useState(true);
+  const [seriesColors, setSeriesColors] = useState(DEFAULT_SERIES_COLORS);
+  const [overlayColors, setOverlayColors] = useState(DEFAULT_OVERLAY_COLORS);
+  const [downloadingForecastChart, setDownloadingForecastChart] =
+    useState(false);
+  const HUE_SLIDER_HEIGHT = 140;
+  const [colorPicker, setColorPicker] = useState({
+    open: false,
+    type: "series",
+    key: "",
+    anchorEl: null,
+    hsv: { h: 0, s: 0, v: 1 },
+  });
+  const satRef = useRef(null);
+  const hueRef = useRef(null);
+  const dragState = useRef({ mode: null });
+  const applyPickedColor = (nextHsv, target = colorPicker) => {
+    const hex = hsvToHex(nextHsv);
+    if (target.type === "overlay") {
+      setOverlayColors((prev) => ({ ...prev, [target.key]: hex }));
+    } else {
+      setSeriesColors((prev) => ({ ...prev, [target.key]: hex }));
+    }
+  };
+
+  const beginDrag = (mode) => {
+    dragState.current = { mode };
+  };
+
+  const stopDrag = () => {
+    dragState.current = { mode: null };
+  };
+
+  const normalizePointerEvent = (event) =>
+    event?.touches?.[0] || event?.changedTouches?.[0] || event;
+
+  const updateSatFromEvent = (event) => {
+    if (!satRef.current) return;
+    const point = normalizePointerEvent(event);
+    if (!point) return;
+    const rect = satRef.current.getBoundingClientRect();
+    const x = Math.min(Math.max(0, point.clientX - rect.left), rect.width);
+    const y = Math.min(Math.max(0, point.clientY - rect.top), rect.height);
+    const s = x / rect.width;
+    const v = 1 - y / rect.height;
+    setColorPicker((prev) => {
+      const hsv = { ...prev.hsv, s, v };
+      applyPickedColor(hsv, prev);
+      return { ...prev, hsv };
+    });
+  };
+
+  const updateHueFromEvent = (event) => {
+    if (!hueRef.current) return;
+    const point = normalizePointerEvent(event);
+    if (!point) return;
+    const rect = hueRef.current.getBoundingClientRect();
+    const sliderHeight = rect.height || HUE_SLIDER_HEIGHT;
+    const offset = point.clientY - rect.top;
+    const y = Math.min(Math.max(0, offset), sliderHeight);
+    const h = Math.min(359.999, Math.max(0, (y / sliderHeight) * 360));
+    setColorPicker((prev) => {
+      const hsv = { ...prev.hsv, h };
+      applyPickedColor(hsv, prev);
+      return { ...prev, hsv };
+    });
+  };
+
+  useEffect(() => {
+    const handleMove = (event) => {
+      if (dragState.current.mode === "sat") updateSatFromEvent(event);
+      else if (dragState.current.mode === "hue") updateHueFromEvent(event);
+    };
+    const handleUp = () => stopDrag();
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+    window.addEventListener("touchmove", handleMove);
+    window.addEventListener("touchend", handleUp);
+    window.addEventListener("touchcancel", handleUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+      window.removeEventListener("touchmove", handleMove);
+      window.removeEventListener("touchend", handleUp);
+      window.removeEventListener("touchcancel", handleUp);
+    };
+  }, []);
+  useEffect(() => {
+    if (!colorPicker.open) {
+      stopDrag();
+    }
+  }, [colorPicker.open]);
 
   const [alertsRaw, setAlertsRaw] = useState([]);
   const [alertSeries, setAlertSeries] = useState([]);
@@ -618,18 +863,110 @@ const DataVisualizationSection = ({
   const [eventsByX, setEventsByX] = useState({});
 
   const chartRef = useRef(null);
+  const forecastChartCaptureRef = useRef(null);
+  const seriesColorEntries = useMemo(() => {
+    const extras = Object.keys(seriesColors).filter(
+      (name) => !SERIES_ORDER.includes(name)
+    );
+    return [...SERIES_ORDER, ...extras].filter((name, idx, arr) => {
+      return idx === arr.indexOf(name) && seriesColors[name];
+    });
+  }, [seriesColors]);
+  const overlayColorEntries = OVERLAY_COLOR_ORDER.filter(
+    (key) => overlayColors[key]
+  );
+  const colorPickerLabel = useMemo(() => {
+    if (colorPicker.type === "overlay") {
+      return OVERLAY_LABELS[colorPicker.key] || colorPicker.key || "Overlay";
+    }
+    return colorPicker.key || "Series";
+  }, [colorPicker.key, colorPicker.type]);
+  const colorPopoverHex = useMemo(
+    () => hsvToHex(colorPicker.hsv),
+    [colorPicker.hsv]
+  );
+  const huePreviewHex = useMemo(
+    () => hsvToHex({ h: colorPicker.hsv.h, s: 1, v: 1 }),
+    [colorPicker.hsv.h]
+  );
+  const satPointerLeft = `${Math.min(Math.max(colorPicker.hsv.s, 0), 1) * 100}%`;
+  const satPointerTop = `${
+    (1 - Math.min(Math.max(colorPicker.hsv.v, 0), 1)) * 100
+  }%`;
+  const normalizedHue =
+    ((colorPicker.hsv.h % 360) + 360) % 360 || 0;
+  const huePointerTopPx = useMemo(() => {
+    const ratio = Math.max(0, Math.min(1, normalizedHue / 360));
+    return ratio * HUE_SLIDER_HEIGHT;
+  }, [normalizedHue]);
+  const handleColorSwatchClick = (type, key) => (event) => {
+    const current =
+      type === "overlay" ? overlayColors[key] : seriesColors[key];
+    setColorPicker({
+      open: true,
+      type,
+      key,
+      anchorEl: event.currentTarget,
+      hsv: hexToHsv(current),
+    });
+  };
+  const closeColorPicker = () =>
+    setColorPicker((prev) => ({ ...prev, open: false, anchorEl: null }));
 
-  const firstOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
-  const buildMonthlyRange = (start, end) => {
-    const out = [];
-    const d = new Date(start.getFullYear(), start.getMonth(), 1);
-    const stop = new Date(end.getFullYear(), end.getMonth(), 1);
+const firstOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
+const buildMonthlyRange = (start, end) => {
+  const out = [];
+  const d = new Date(start.getFullYear(), start.getMonth(), 1);
+  const stop = new Date(end.getFullYear(), end.getMonth(), 1);
     while (d <= stop) {
       out.push(new Date(d));
       d.setMonth(d.getMonth() + 1);
-    }
-    return out;
-  };
+  }
+  return out;
+};
+
+const firstOfWeek = (d) => {
+  const date = new Date(d);
+  const normalized = startOfWeek(date, { weekStartsOn: 1 });
+  normalized.setHours(0, 0, 0, 0);
+  return normalized;
+};
+
+const buildWeeklyRange = (start, end) => {
+  const out = [];
+  let cursor = firstOfWeek(start);
+  const stop = firstOfWeek(end);
+  while (cursor <= stop) {
+    out.push(new Date(cursor));
+    cursor = addWeeks(cursor, 1);
+  }
+  return out;
+};
+
+const PERIOD_CONFIG = {
+  M: {
+    endpoint: "/getLineChart",
+    rowDateKey: "forecast_month",
+    bucketFn: firstOfMonth,
+    rangeBuilder: buildMonthlyRange,
+    formatLabel: (date) => format(date, "MMM yyyy"),
+  },
+  W: {
+    endpoint: "/getWeeklyLineChart",
+    rowDateKey: "forecast_week",
+    bucketFn: firstOfWeek,
+    rangeBuilder: buildWeeklyRange,
+    formatLabel: (date) => format(date, "yyyy-'W'II"),
+  },
+};
+
+const getPeriodConfig = (period) => PERIOD_CONFIG[period] || PERIOD_CONFIG.M;
+
+const formatCategoryLabelForPeriod = (period, value) => {
+  const config = getPeriodConfig(period);
+  const normalized = config.bucketFn(new Date(value));
+  return config.formatLabel(normalized);
+};
 
   /* -------- Base line chart: actual before today, dotted after -------- */
 
@@ -637,129 +974,196 @@ const DataVisualizationSection = ({
     if (!startDate || !endDate) return;
 
     const controller = new AbortController();
+    const config = getPeriodConfig(selectedPeriod);
+    const FORECAST_WINDOW = selectedPeriod === "W" ? 26 : 6; // 6 months = 26 weeks for weekly view
+    const advanceBucket = (date, steps = 1) =>
+      selectedPeriod === "W" ? addWeeks(date, steps) : addMonths(date, steps);
+
+    const normalizeDate = (value) => {
+      if (!value) return null;
+      const d = value instanceof Date ? new Date(value) : new Date(value);
+      if (Number.isNaN(d.getTime())) return null;
+      const normalized = config.bucketFn(d);
+      return Number.isNaN(normalized.getTime()) ? null : normalized;
+    };
+
+    const pivotBucket = config.bucketFn(new Date());
+
+    let effectiveStart = startDate;
+    let effectiveEnd = endDate;
+
+    if (showForecast) {
+      effectiveStart = format(pivotBucket, "yyyy-MM-dd");
+      const horizonEnd = advanceBucket(pivotBucket, FORECAST_WINDOW - 1);
+      effectiveEnd = format(horizonEnd, "yyyy-MM-dd");
+    }
+
+    let normalizedStart = normalizeDate(effectiveStart);
+    let normalizedEnd = normalizeDate(effectiveEnd);
 
     const fetchChart = async () => {
       setChartLoading(true);
       try {
+        const todayBucket = normalizeDate(new Date());
+        const pastRange =
+          !showForecast &&
+          normalizedEnd &&
+          todayBucket &&
+          normalizedEnd.getTime() < todayBucket.getTime();
+        const includeForecast = showForecast || !pastRange;
+
         const payload = {
-          startDate,
-          endDate,
+          startDate: effectiveStart,
+          endDate: effectiveEnd,
           skuId: Array.isArray(skuIds) ? skuIds[0] ?? null : skuIds,
           countryIds,
           stateIds,
           plantIds,
           supplierIds,
           supplierLocations,
-          includeForecast: true,
+          includeForecast,
         };
 
         const { data } = await axios.post(
-          `${API_BASE_URL}/getLineChart`,
+          `${API_BASE_URL}${config.endpoint}`,
           payload,
           { signal: controller.signal }
         );
 
         const rows = Array.isArray(data) ? data : [];
 
-        // Build month buckets
-        const from = firstOfMonth(new Date(startDate));
-        const to = firstOfMonth(new Date(endDate));
-        const months = buildMonthlyRange(from, to);
-        const categories = months.map((d) => format(d, "MMM yyyy"));
+        // If dates missing (no filter selected), derive from data
+        if (!normalizedStart || !normalizedEnd) {
+          const dates = rows
+            .map((r) => normalizeDate(r[config.rowDateKey]))
+            .filter(Boolean)
+            .sort((a, b) => a - b);
+          if (!dates.length) return;
+          normalizedStart = normalizedStart || dates[0];
+          const last = dates[dates.length - 1];
+          const extendedEnd = advanceBucket(last, FORECAST_WINDOW);
+          normalizedEnd = normalizedEnd || extendedEnd;
+        }
+
+        if (!normalizedStart || !normalizedEnd) return;
+
+        // Build buckets for the selected period
+        let buckets = config.rangeBuilder(normalizedStart, normalizedEnd);
+
+        const categories = buckets.map((d) => config.formatLabel(d));
         setLineCategories(categories);
 
-        // Pivot month logic
-        const today = new Date();
-        const todayMonth = firstOfMonth(today);
+        const bucketIndexMap = new Map(
+          buckets.map((d, idx) => [d.getTime(), idx])
+        );
 
-        let pivotIdx = months.findIndex((d) => d >= todayMonth);
-        if (pivotIdx === -1) pivotIdx = months.length;
+        // Determine the pivot bucket (current period)
+        const today = normalizeDate(new Date());
+        let pivotIdx = today
+          ? buckets.findIndex((d) => d.getTime() >= today.getTime())
+          : -1;
+        if (pivotIdx === -1) pivotIdx = buckets.length;
 
         // Group values by supplier as a single series
         const bySupplier = new Map();
 
         for (const r of rows) {
           const supplier = r.supplier_name || "Supplier";
-          const m = firstOfMonth(new Date(r.forecast_month));
-          const idx = months.findIndex(
-            (d) =>
-              d.getFullYear() === m.getFullYear() &&
-              d.getMonth() === m.getMonth()
-          );
-          if (idx === -1) continue;
+          const normalized = normalizeDate(r[config.rowDateKey]);
+          if (!normalized) continue;
+          const idx = bucketIndexMap.get(normalized.getTime());
+          if (idx == null) continue;
 
           const value = Number(r.ppv_variance_percentage);
           if (!Number.isFinite(value)) continue;
 
           if (!bySupplier.has(supplier)) {
-            bySupplier.set(supplier, Array(months.length).fill(null));
+            bySupplier.set(supplier, Array(buckets.length).fill(null));
           }
           const arr = bySupplier.get(supplier);
           arr[idx] = value;
         }
 
-        const colorBy = {
-          "Global Parts Inc.": "#22c55e",
-          "AutoMech Gumby": "#60a5fa",
-          "AutoMech Gumbys": "#60a5fa",
-          "Bharat Supplies": "#eab308",
+        const colorMap = { ...DEFAULT_SERIES_COLORS, ...seriesColors };
+        let colorChanged = false;
+        const getColorFor = (name, idx) => {
+          if (!colorMap[name]) {
+            colorMap[name] = FALLBACK_COLORS[idx % FALLBACK_COLORS.length];
+            colorChanged = true;
+          }
+          return colorMap[name];
         };
 
         const seriesOut = [];
+        const lineMarker = {
+          enabled: false,
+          symbol: "circle",
+          states: {
+            hover: {
+              enabled: true,
+              radius: 5,
+              lineWidth: 2,
+              lineColor: "#ffffff",
+            },
+          },
+        };
 
+        let supplierIdx = 0;
         for (const [name, values] of bySupplier.entries()) {
-          const color = colorBy[name] || undefined;
+          const color = getColorFor(name, supplierIdx++);
 
-          if (showForecast) {
-            const actualData = values.map((v, i) => (i <= pivotIdx ? v : null));
-            const forecastData = values.map((v, i) =>
-              i >= pivotIdx ? v : null
-            );
+          const forecastData = Array(buckets.length).fill(null);
+          const normalizeForecastValue = (val) => {
+            if (val == null) return null;
+            if (Object.is(val, -0)) return null;
+            return val === 0 ? null : val;
+          };
 
-            if (actualData.some((v) => typeof v === "number")) {
-              seriesOut.push({
-                name,
-                type: "line",
-                data: actualData,
-                color,
-                marker: { enabled: true, radius: 3 },
-                lineWidth: 2,
-                tooltip: { valueSuffix: "%" },
-                zIndex: 2,
-              });
-            }
+          const actualData = values.map((value, idx) => {
+            if (value == null || Number.isNaN(value)) return null;
+            return idx <= pivotIdx ? value : null;
+          });
 
-            if (forecastData.some((v) => typeof v === "number")) {
-              seriesOut.push({
-                name: `${name} Forecast`,
-                type: "line",
-                data: forecastData,
-                color,
-                dashStyle: "ShortDash",
-                marker: { enabled: true, radius: 3 },
-                lineWidth: 2,
-                tooltip: { valueSuffix: "%" },
-                zIndex: 1,
-              });
+          values.forEach((value, idx) => {
+            if (value == null || Number.isNaN(value)) return;
+            const isForecastBucket = idx >= pivotIdx && idx < pivotIdx + FORECAST_WINDOW;
+            if (isForecastBucket) {
+              forecastData[idx] = normalizeForecastValue(value);
             }
-          } else {
-            // No forecast split: simple solid series
-            if (values.some((v) => typeof v === "number")) {
-              seriesOut.push({
-                name,
-                type: "line",
-                data: values,
-                color,
-                marker: { enabled: true, radius: 3 },
-                lineWidth: 2,
-                tooltip: { valueSuffix: "%" },
-                zIndex: 2,
-              });
-            }
+          });
+
+          if (actualData.some((v) => typeof v === "number")) {
+            seriesOut.push({
+              name,
+              type: "line",
+              data: actualData,
+              color,
+              marker: lineMarker,
+              lineWidth: 2,
+              tooltip: { valueSuffix: "%" },
+              zIndex: 2,
+            });
+          }
+
+          if (payload.includeForecast && forecastData.some((v) => typeof v === "number")) {
+            seriesOut.push({
+              name: `${name} Forecast`,
+              type: "line",
+              data: forecastData,
+              color,
+              dashStyle: "ShortDash",
+              marker: lineMarker,
+              lineWidth: 2,
+              tooltip: { valueSuffix: "%" },
+              zIndex: 1,
+            });
           }
         }
 
         setLineSeries(seriesOut);
+        if (colorChanged) {
+          setSeriesColors((prev) => ({ ...prev, ...colorMap }));
+        }
       } catch (e) {
         if (axios.isCancel?.(e)) return;
         console.error("Error loading chart", e);
@@ -782,7 +1186,20 @@ const DataVisualizationSection = ({
     supplierIds,
     supplierLocations,
     showForecast,
+    selectedPeriod,
   ]);
+
+  useEffect(() => {
+    setLineSeries((prev) =>
+      prev.map((series) => {
+        if (series.type === "scatter") return series;
+        const baseName = series.name.replace(" (Forecast)", "");
+        const color = seriesColors[baseName];
+        if (!color) return series;
+        return { ...series, color };
+      })
+    );
+  }, [seriesColors]);
 
   /* -------- Alerts overlay -------- */
 
@@ -801,20 +1218,8 @@ const DataVisualizationSection = ({
       return;
     }
 
-    const emojiToColor = (emoji) => {
-      switch (emoji) {
-        case "🔴":
-          return "#ef4444";
-        case "🟠":
-          return "#f59e0b";
-        case "🟡":
-          return "#eab308";
-        case "🟢":
-          return "#22c55e";
-        default:
-          return "#3b82f6";
-      }
-    };
+    const alertFill = hexToRgba(overlayColors.alerts, 0.85);
+    const alertStroke = hexToRgba(overlayColors.alerts, 1);
 
     const baseSeriesMap = new Map(
       lineSeries
@@ -825,7 +1230,7 @@ const DataVisualizationSection = ({
     const points = [];
     for (const a of alertsRaw) {
       const date = new Date(a.date_value);
-      const cat = format(firstOfMonth(date), "MMM yyyy");
+      const cat = formatCategoryLabelForPeriod(selectedPeriod, date);
       const xIndex = lineCategories.indexOf(cat);
       if (xIndex === -1) continue;
 
@@ -842,9 +1247,15 @@ const DataVisualizationSection = ({
         marker: {
           symbol: "circle",
           radius: 6,
-          fillColor: emojiToColor(a.marker_color_emoji),
+          fillColor: alertFill,
           lineColor: "#ffffff",
           lineWidth: 1.5,
+          states: {
+            hover: {
+              lineColor: alertStroke,
+              lineWidth: 2,
+            },
+          },
         },
         custom: {
           tooltip: a.tooltip,
@@ -865,13 +1276,21 @@ const DataVisualizationSection = ({
               type: "scatter",
               data: points,
               zIndex: 10,
+              showInLegend: false,
               enableMouseTracking: true,
               tooltip: { pointFormat: "" },
             },
           ]
         : []
     );
-  }, [showAlerts, alertsRaw, lineCategories, lineSeries]);
+  }, [
+    showAlerts,
+    alertsRaw,
+    lineCategories,
+    lineSeries,
+    overlayColors.alerts,
+    selectedPeriod,
+  ]);
 
   const combinedSeries = useMemo(
     () => (showAlerts ? [...lineSeries, ...alertSeries] : lineSeries),
@@ -904,14 +1323,14 @@ const DataVisualizationSection = ({
       return;
     }
 
-    const impactColor = () => "rgba(194, 65, 12, 0.40)";
+    const impactColor = () => hexToRgba(overlayColors.globalEvents, 0.35);
 
     const bands = [];
     const byX = {};
 
     globalRaw.forEach((ev, idx) => {
       const d = new Date(ev.date_value);
-      const cat = format(firstOfMonth(d), "MMM yyyy");
+      const cat = formatCategoryLabelForPeriod(selectedPeriod, d);
       const xIdx = lineCategories.indexOf(cat);
       if (xIdx === -1) return;
 
@@ -930,13 +1349,46 @@ const DataVisualizationSection = ({
 
     setXPlotBands(bands);
     setEventsByX(byX);
-  }, [showGlobal, globalRaw, lineCategories]);
+  }, [
+    showGlobal,
+    globalRaw,
+    lineCategories,
+    overlayColors.globalEvents,
+    selectedPeriod,
+  ]);
 
   const handleGlobalToggle = async (e) => {
     const checked = e.target.checked;
     setShowGlobal(checked);
     if (checked && globalRaw.length === 0) {
       await fetchGlobalEvents();
+    }
+  };
+
+  const handleDownloadForecastChart = async () => {
+    if (!forecastChartCaptureRef.current || chartLoading) return;
+    if (downloadingForecastChart) return;
+    try {
+      setDownloadingForecastChart(true);
+      const canvas = await html2canvas(forecastChartCaptureRef.current, {
+        backgroundColor: "#ffffff",
+        scale: window.devicePixelRatio
+          ? Math.min(window.devicePixelRatio, 2)
+          : 2,
+      });
+      const imgData = canvas.toDataURL("image/png");
+      const orientation = canvas.width >= canvas.height ? "l" : "p";
+      const pdf = new jsPDF({
+        orientation,
+        unit: "px",
+        format: [canvas.width, canvas.height],
+      });
+      pdf.addImage(imgData, "PNG", 0, 0, canvas.width, canvas.height);
+      pdf.save("ppv-forecast-chart.pdf");
+    } catch (error) {
+      console.error("Failed to download PPV forecast chart", error);
+    } finally {
+      setDownloadingForecastChart(false);
     }
   };
 
@@ -977,10 +1429,10 @@ const DataVisualizationSection = ({
     min = roundDown(min);
     max = roundUp(max);
 
-    if (max > -0.1 && min < 0.1) {
-      const halo = Math.max(5, stepBase * 3);
-      min = Math.min(min, -halo);
-      max = Math.max(max, halo);
+    // Anchor zero if data crosses it, but avoid forcing extra space below -8
+    if (max > 0 && min < 0) {
+      min = Math.max(min, -8);
+      max = Math.min(max, 8);
     }
     return { min, max, span: max - min };
   };
@@ -1008,12 +1460,45 @@ const DataVisualizationSection = ({
     const { min, max, span } = computeYBounds(combinedSeries);
     const dynamicHeight = computeChartHeight(combinedSeries);
     const tickAmount = span <= 8 ? 5 : span <= 20 ? 7 : span <= 40 ? 9 : 11;
+    const intMin = Math.floor(min);
+    const intMax = Math.ceil(max);
+    const intSpan = Math.max(1, intMax - intMin);
+    const intStep = Math.max(1, Math.ceil(intSpan / Math.max(1, tickAmount - 1)));
+    const tickPositions = [];
+    for (let v = intMin; v <= intMax; v += intStep) {
+      tickPositions.push(v);
+    }
+    const finalMin = tickPositions[0] ?? intMin;
+    const finalMax = tickPositions[tickPositions.length - 1] ?? intMax;
 
     return {
       chart: {
         height: dynamicHeight,
         spacing: [10, 16, 16, 16],
         backgroundColor: "transparent",
+        zoomType: "x",
+        resetZoomButton: {
+          position: { align: "right", verticalAlign: "top", x: -10, y: 10 },
+          theme: {
+            fill: "#ffffff",
+            stroke: "#c0c0c0",
+            "stroke-width": 1,
+            style: {
+              color: "#2f2f2f",
+              fontSize: "12px",
+              fontWeight: 500,
+              padding: "2px 10px",
+              textShadow: "none",
+            },
+            r: 6,
+            states: {
+              hover: {
+                fill: "#f9f9f9",
+                style: { color: "#111" },
+              },
+            },
+          },
+        },
       },
       title: { text: null },
       credits: { enabled: false },
@@ -1023,7 +1508,7 @@ const DataVisualizationSection = ({
         tickmarkPlacement: "on",
         lineColor: "rgba(0,0,0,0.15)",
         tickColor: "rgba(0,0,0,0.2)",
-        gridLineWidth: 1,
+        gridLineWidth: showGridLines ? 1 : 0,
         gridLineColor: "rgba(0,0,0,0.08)",
         labels: {
           style: {
@@ -1036,18 +1521,19 @@ const DataVisualizationSection = ({
       },
       yAxis: {
         title: { text: null },
-        min,
-        max,
+        min: finalMin,
+        max: finalMax,
         startOnTick: true,
         endOnTick: true,
         minPadding: 0.02,
         maxPadding: 0.02,
         gridLineColor: "rgba(0,0,0,0.1)",
-        gridLineWidth: 1,
+        gridLineWidth: showGridLines ? 1 : 0,
         tickAmount,
+        tickPositions,
         labels: {
           formatter() {
-            return `${this.value}%`;
+            return `${Math.round(this.value)}%`;
           },
           style: {
             color: "rgba(0,0,0,0.65)",
@@ -1233,7 +1719,18 @@ const DataVisualizationSection = ({
           },
         },
         line: {
-          marker: { lineWidth: 0, radius: 4, symbol: "circle" },
+          marker: {
+            enabled: false,
+            symbol: "circle",
+            states: {
+              hover: {
+                enabled: true,
+                radius: 5,
+                lineWidth: 2,
+                lineColor: "#ffffff",
+              },
+            },
+          },
           lineWidth: 2.5,
         },
         scatter: {
@@ -1254,7 +1751,7 @@ const DataVisualizationSection = ({
         ],
       },
     };
-  }, [lineCategories, combinedSeries, showGlobal, xPlotBands, eventsByX]);
+  }, [lineCategories, combinedSeries, showGlobal, xPlotBands, eventsByX, showGridLines]);
 
   useLayoutEffect(() => {
     chartRef.current?.chart?.reflow?.();
@@ -1441,10 +1938,12 @@ const DataVisualizationSection = ({
                   gap: 1.3,
                 }}
               >
-                <IconButton size="small">
-                  <GridViewIcon fontSize="small" />
-                </IconButton>
-                <IconButton size="small">
+                <IconButton
+                  size="small"
+                  onClick={handleDownloadForecastChart}
+                  disabled={chartLoading || downloadingForecastChart}
+                  aria-label="Download PPV forecast chart"
+                >
                   <DownloadIcon
                     sx={{ width: 20, height: 20, color: "text.secondary" }}
                   />
@@ -1452,12 +1951,12 @@ const DataVisualizationSection = ({
                 <IconButton size="small">
                   <ShareIcon fontSize="small" />
                 </IconButton>
-                <IconButton size="small">
+                <IconButton size="small" onClick={() => setConfigOpen(true)}>
                   <SettingsIcon fontSize="small" />
                 </IconButton>
               </Box>
 
-              <Box sx={{ pt: 6 }}>
+              <Box sx={{ pt: 6 }} ref={forecastChartCaptureRef}>
                 {chartLoading ? (
                   <Stack
                     alignItems="center"
@@ -1487,6 +1986,7 @@ const DataVisualizationSection = ({
               skuIds={skuIds}
               supplierIds={supplierIds}
               supplierLocations={supplierLocations}
+              selectedPeriod={selectedPeriod}
             />
           </>
         )}
@@ -1533,6 +2033,323 @@ const DataVisualizationSection = ({
           </Box>
         )}
       </Stack>
+
+      <Drawer
+        anchor="right"
+        open={configOpen}
+        onClose={() => setConfigOpen(false)}
+        PaperProps={{ sx: { width: 320, p: 3 } }}
+      >
+        <Stack spacing={2}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between">
+            <Stack direction="row" spacing={1} alignItems="center">
+              <SettingsIcon sx={{ color: "#6b7280", fontSize: 18 }} />
+              <Typography
+                sx={{ fontWeight: 700, fontSize: 16, color: "#4b5563", letterSpacing: 0.2 }}
+              >
+                Graph Configuration
+              </Typography>
+            </Stack>
+            <IconButton onClick={() => setConfigOpen(false)} size="small">
+              <CloseIcon sx={{ color: "#6b7280" }} />
+            </IconButton>
+          </Stack>
+          <Divider />
+
+          <Box>
+            <FormGroup>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={showGridLines}
+                    onChange={(e) => setShowGridLines(e.target.checked)}
+                  />
+                }
+                label="Show Grid Lines"
+                sx={{
+                  "& .MuiTypography-root": {
+                    fontWeight: 600,
+                    color: "text.primary",
+                  },
+                }}
+              />
+            </FormGroup>
+          </Box>
+
+          <Divider />
+
+          <Typography
+            variant="subtitle2"
+            fontWeight={600}
+            sx={{ color: "text.secondary" }}
+          >
+            Series Colors
+          </Typography>
+          <Stack spacing={1.2}>
+            {seriesColorEntries.map((name) => (
+              <Box
+                key={name}
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  py: 0.4,
+                }}
+              >
+                <Stack direction="row" spacing={1.2} alignItems="center">
+                  <Box
+                    sx={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: "2px",
+                      bgcolor: seriesColors[name] || "#9ca3af",
+                      border: "1px solid rgba(0,0,0,0.15)",
+                    }}
+                  />
+                  <Typography sx={{ fontSize: 14, color: "text.secondary" }}>
+                    {name}
+                  </Typography>
+                </Stack>
+                <Box
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Change ${name} color`}
+                  onClick={handleColorSwatchClick("series", name)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      handleColorSwatchClick("series", name)(event);
+                    }
+                  }}
+                  sx={{
+                    width: 32,
+                    height: 28,
+                    borderRadius: "8px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    bgcolor: "#f8fafc",
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.4)",
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: "6px",
+                      bgcolor: seriesColors[name] || "#9ca3af",
+                    }}
+                  />
+                </Box>
+              </Box>
+            ))}
+          </Stack>
+
+          <Divider />
+
+          <Typography
+            variant="subtitle2"
+            fontWeight={600}
+            sx={{ color: "text.secondary" }}
+          >
+            Overlay Colors
+          </Typography>
+          <Stack spacing={1.2}>
+            {overlayColorEntries.map((key) => (
+              <Box
+                key={key}
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  py: 0.4,
+                }}
+              >
+                <Stack direction="row" spacing={1.2} alignItems="center">
+                  <Box
+                    sx={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: "2px",
+                      bgcolor: overlayColors[key] || "#9ca3af",
+                      border: "1px solid rgba(0,0,0,0.15)",
+                    }}
+                  />
+                  <Typography sx={{ fontSize: 14, color: "text.secondary" }}>
+                    {OVERLAY_LABELS[key] || key}
+                  </Typography>
+                </Stack>
+                <Box
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Change ${OVERLAY_LABELS[key] || key} color`}
+                  onClick={handleColorSwatchClick("overlay", key)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      handleColorSwatchClick("overlay", key)(event);
+                    }
+                  }}
+                  sx={{
+                    width: 32,
+                    height: 28,
+                    borderRadius: "8px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    bgcolor: "#f8fafc",
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.4)",
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: "6px",
+                      bgcolor: overlayColors[key] || "#9ca3af",
+                    }}
+                  />
+                </Box>
+              </Box>
+            ))}
+          </Stack>
+        </Stack>
+      </Drawer>
+      <Popover
+        open={colorPicker.open}
+        anchorEl={colorPicker.anchorEl}
+        onClose={closeColorPicker}
+        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+        transformOrigin={{ vertical: "top", horizontal: "left" }}
+        disableRestoreFocus
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            boxShadow:
+              "0px 16px 32px rgba(15,23,42,0.18), 0px 2px 8px rgba(15,23,42,0.12)",
+            p: 2,
+            width: 260,
+          },
+        }}
+      >
+        <Stack spacing={1.5}>
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+          >
+            <Typography
+              sx={{ fontWeight: 600, fontSize: 14, color: "text.primary" }}
+            >
+              {colorPickerLabel}
+            </Typography>
+            <Typography
+              sx={{
+                fontFamily: "JetBrains Mono, monospace",
+                fontSize: 13,
+                color: "text.secondary",
+              }}
+            >
+              {colorPopoverHex.toUpperCase()}
+            </Typography>
+          </Stack>
+          <Stack direction="row" spacing={1.5} alignItems="stretch">
+            <Box
+              ref={satRef}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                beginDrag("sat");
+                updateSatFromEvent(event);
+              }}
+              onTouchStart={(event) => {
+                event.preventDefault();
+                beginDrag("sat");
+                updateSatFromEvent(event);
+              }}
+              sx={{
+                width: 180,
+                height: 140,
+                borderRadius: "12px",
+                position: "relative",
+                background: `linear-gradient(0deg, rgba(0,0,0,1), rgba(0,0,0,0)), linear-gradient(90deg, #ffffff, ${huePreviewHex})`,
+                cursor: "crosshair",
+              }}
+            >
+              <Box
+                sx={{
+                  position: "absolute",
+                  width: 14,
+                  height: 14,
+                  borderRadius: "50%",
+                  border: "2px solid #fff",
+                  boxShadow: "0 0 6px rgba(15,23,42,0.4)",
+                  transform: "translate(-50%, -50%)",
+                  left: satPointerLeft,
+                  top: satPointerTop,
+                }}
+              />
+            </Box>
+            <Box
+              ref={hueRef}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                beginDrag("hue");
+                updateHueFromEvent(event);
+              }}
+              onTouchStart={(event) => {
+                event.preventDefault();
+                beginDrag("hue");
+                updateHueFromEvent(event);
+              }}
+              sx={{
+                width: 22,
+                height: HUE_SLIDER_HEIGHT,
+                borderRadius: "10px",
+                background:
+                  "linear-gradient(180deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)",
+                position: "relative",
+                cursor: "ns-resize",
+                border: "1px solid rgba(15,23,42,0.25)",
+              }}
+            >
+              <Box
+                sx={{
+                  position: "absolute",
+                  left: "50%",
+                  width: 18,
+                  height: 6,
+                  borderRadius: 999,
+                  border: "1px solid #fff",
+                  boxShadow: "0 1px 3px rgba(15,23,42,0.4)",
+                  transform: "translate(-50%, -50%)",
+                  top: `${huePointerTopPx}px`,
+                  bgcolor: hexToRgba(huePreviewHex, 0.9),
+                  cursor: "ns-resize",
+                }}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  beginDrag("hue");
+                  updateHueFromEvent(event);
+                }}
+                onTouchStart={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  beginDrag("hue");
+                  updateHueFromEvent(event);
+                }}
+              />
+            </Box>
+          </Stack>
+          <Stack direction="row" justifyContent="flex-end" spacing={1}>
+            <Button size="small" onClick={closeColorPicker}>
+              Done
+            </Button>
+          </Stack>
+        </Stack>
+      </Popover>
     </>
   );
 };
@@ -1548,6 +2365,7 @@ const SupplierDataTableSection = ({
   skuIds = [],
   supplierIds = [],
   supplierLocations = [],
+  selectedPeriod = "M",
 }) => {
   const [rows, setRows] = useState([]);
   const [columns, setColumns] = useState([]);
@@ -1555,6 +2373,24 @@ const SupplierDataTableSection = ({
   const [loading, setLoading] = useState(false);
 
   const COL_PX = 72;
+
+  const parseHeatmapLabelToDate = (label) => {
+    if (!label) return null;
+    const formats = ["MMM yyyy", "MMM dd, yyyy", "MMM d, yyyy"];
+    for (const fmt of formats) {
+      const parsed = parse(label, fmt, new Date());
+      if (isValid(parsed)) {
+        parsed.setHours(0, 0, 0, 0);
+        return parsed;
+      }
+    }
+    const fallback = new Date(label);
+    if (!Number.isNaN(fallback.getTime())) {
+      fallback.setHours(0, 0, 0, 0);
+      return fallback;
+    }
+    return null;
+  };
 
   const bgFor = (v) => {
     if (v == null || Number.isNaN(v) || v === 0) return "#ffffff";
@@ -1592,8 +2428,10 @@ const SupplierDataTableSection = ({
           supplierLocations,
         };
 
+        const endpoint =
+          selectedPeriod === "W" ? "/getWeeklyHeatMap" : "/getHeatMap";
         const { data } = await axios.post(
-          `${API_BASE_URL}/getHeatMap`,
+          `${API_BASE_URL}${endpoint}`,
           payload
         );
         const arr = Array.isArray(data) ? data : [];
@@ -1607,8 +2445,14 @@ const SupplierDataTableSection = ({
 
         const colList = Array.from(keys)
           .map((k) => {
-            const d = parse(k, "MMM yyyy", new Date());
-            return { key: k, date: d };
+            let parsed = parseHeatmapLabelToDate(k);
+            if (!parsed) {
+              parsed = new Date(k);
+              if (Number.isNaN(parsed.getTime())) {
+                parsed = new Date(0);
+              }
+            }
+            return { key: k, date: parsed };
           })
           .sort((a, b) => a.date - b.date);
 
@@ -1617,11 +2461,14 @@ const SupplierDataTableSection = ({
         const ymap = new Map();
         colList.forEach((c, idx) => {
           const y = format(c.date, "yyyy");
-          const m = format(c.date, "MMM");
+          const monthLabel =
+            selectedPeriod === "W"
+              ? format(c.date, "MMM d")
+              : format(c.date, "MMM");
           if (!ymap.has(y))
             ymap.set(y, { year: y, months: [], lastIndex: idx });
           const g = ymap.get(y);
-          g.months.push(m);
+          g.months.push(monthLabel);
           g.lastIndex = idx;
         });
 
@@ -1646,6 +2493,7 @@ const SupplierDataTableSection = ({
     skuIds,
     supplierIds,
     supplierLocations,
+    selectedPeriod,
   ]);
 
   const lastOfYearIdx = useMemo(
