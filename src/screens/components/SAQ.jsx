@@ -321,9 +321,7 @@ export default function SAQ({
   const [fullscreen, setFullscreen] = useState(false);
   const [downloadingChart, setDownloadingChart] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [seriesColors, setSeriesColors] = useState(
-    DEFAULT_SAQ_SERIES_COLORS
-  );
+  const [seriesColors, setSeriesColors] = useState(DEFAULT_SAQ_SERIES_COLORS);
 
   const baseLineStyle = useRef({
     strokeWidth: 2.6,
@@ -376,7 +374,9 @@ export default function SAQ({
     () => hsvToHex({ h: colorPicker.hsv.h, s: 1, v: 1 }),
     [colorPicker.hsv.h]
   );
-  const satPointerLeft = `${Math.min(Math.max(colorPicker.hsv.s, 0), 1) * 100}%`;
+  const satPointerLeft = `${
+    Math.min(Math.max(colorPicker.hsv.s, 0), 1) * 100
+  }%`;
   const satPointerTop = `${
     (1 - Math.min(Math.max(colorPicker.hsv.v, 0), 1)) * 100
   }%`;
@@ -456,13 +456,63 @@ export default function SAQ({
 
   const handleDownloadChart = async () => {
     if (!chartCaptureRef.current || downloadingChart) return;
+
     try {
       setDownloadingChart(true);
-      const canvas = await html2canvas(chartCaptureRef.current, {
+
+      // Wait for any pending renders to complete
+      await new Promise((resolve) => setTimeout(resolve, 800));
+
+      const element = chartCaptureRef.current;
+
+      const canvas = await html2canvas(element, {
         backgroundColor: "#ffffff",
-        scale: window.devicePixelRatio ? Math.min(window.devicePixelRatio, 2) : 2,
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        width: element.scrollWidth,
+        height: element.scrollHeight,
+        onclone: (clonedDoc) => {
+          // Force all SVG elements to be visible and properly sized
+          const chartContainer = clonedDoc.querySelector(".recharts-wrapper");
+          if (chartContainer) {
+            chartContainer.style.overflow = "visible";
+          }
+
+          const svgs = clonedDoc.querySelectorAll("svg");
+          svgs.forEach((svg) => {
+            svg.style.overflow = "visible";
+            svg.style.display = "block";
+          });
+
+          // Ensure all paths are visible (for lines)
+          const paths = clonedDoc.querySelectorAll("path");
+          paths.forEach((path) => {
+            if (path.style.visibility === "hidden") {
+              path.style.visibility = "visible";
+            }
+          });
+
+          // Ensure all lines are visible
+          const lines = clonedDoc.querySelectorAll("line");
+          lines.forEach((line) => {
+            if (line.style.visibility === "hidden") {
+              line.style.visibility = "visible";
+            }
+          });
+
+          // Ensure bars are visible
+          const rects = clonedDoc.querySelectorAll("rect");
+          rects.forEach((rect) => {
+            if (rect.style.visibility === "hidden") {
+              rect.style.visibility = "visible";
+            }
+          });
+        },
       });
-      const imgData = canvas.toDataURL("image/png");
+
+      const imgData = canvas.toDataURL("image/png", 1.0);
       const orientation = canvas.width >= canvas.height ? "l" : "p";
       const pdf = new jsPDF({
         orientation,
@@ -473,6 +523,7 @@ export default function SAQ({
       pdf.save("saq-chart.pdf");
     } catch (error) {
       console.error("Failed to download SAQ chart", error);
+      alert("Failed to download chart. Please try again.");
     } finally {
       setDownloadingChart(false);
     }
@@ -688,6 +739,7 @@ export default function SAQ({
               data={chartData}
               margin={{ top: 10, right: 40, bottom: 40, left: 8 }}
               barCategoryGap="10%"
+              animationDuration={60}
             >
               <CartesianGrid stroke={COLOR_GRID} vertical={false} />
 
@@ -853,17 +905,6 @@ export default function SAQ({
 
   return (
     <Box sx={{ pt: 1.3, px: 2, pb: 2, fontFamily: FONT_MONO }}>
-      <Typography
-        sx={{
-          fontWeight: 600,
-          fontSize: 16,
-          color: "#6b6b6b",
-          mb: 2,
-        }}
-      >
-        SAQ Monthly Performance Chart
-      </Typography>
-
       {/* Metric + Forecast legends + Top-right Icons */}
       <Box
         sx={{
@@ -884,6 +925,7 @@ export default function SAQ({
             flexWrap: "wrap",
           }}
         >
+          {/* Main metrics */}
           {[
             {
               label: "Standard Price ($)",
@@ -903,86 +945,107 @@ export default function SAQ({
               active: showQuantity,
               toggle: () => setShowQuantity((p) => !p),
             },
-            // Forecast legend chips (independent toggles)
-            ...[
-              {
-                label: "Quantity Forecast",
-                color: seriesColors.quantity,
-                active: showQuantityForecast,
-                isForecast: true,
-                toggle: () => setShowQuantityForecast((p) => !p),
-              },
-              {
-                label: "Actual Price Forecast",
-                color: seriesColors.actual,
-                active: showActualForecast,
-                isForecast: true,
-                toggle: () => setShowActualForecast((p) => !p),
-              },
-              {
-                label: "Standard Price Forecast",
-                color: seriesColors.standard,
-                active: showStandardForecast,
-                isForecast: true,
-                toggle: () => setShowStandardForecast((p) => !p),
-              },
-            ],
-          ].flat().map((btn) => (
+          ].map((btn) => (
             <Box
               key={btn.label}
               onClick={btn.toggle}
               sx={{
-                display: "flex",
+                display: "inline-flex",
                 alignItems: "center",
-                gap: btn.isForecast ? 0.8 : 0.6,
-                px: 1.1,
-                py: 0.55,
-                borderRadius: "10px",
+                gap: 0.6,
+                px: 1.2,
+                py: 0.6,
+                borderRadius: "4px",
                 cursor: "pointer",
-                minWidth: 140,
-                height: 32,
                 backgroundColor: btn.active ? "#F8FBFF" : "#F9FAFB",
-                border: btn.active
-                  ? "1px solid #D1D5DB"
-                  : "1px solid #E5E7EB",
-                boxShadow: btn.active
-                  ? "0px 1px 3px rgba(0,0,0,0.06)"
-                  : "none",
+                border: btn.active ? "1px solid #D1D5DB" : "1px solid #E5E7EB",
+                boxShadow: btn.active ? "0px 1px 3px rgba(0,0,0,0.06)" : "none",
                 transition: "all 0.2s ease",
                 "&:hover": {
                   backgroundColor: btn.active ? "#EEF2FF" : "#F3F4F6",
                 },
                 opacity: btn.active ? 1 : 0.6,
+              }}
+            >
+              <Box
+                sx={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: "50%",
+                  backgroundColor: btn.active ? btn.color : "#D1D5DB",
+                  flexShrink: 0,
+                }}
+              />
+              <Typography
+                sx={{
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: btn.active ? "#374151" : "#9CA3AF",
+                  lineHeight: 1,
+                  whiteSpace: "nowrap",
                 }}
               >
-                {btn.isForecast ? (
-                  <Box
-                    sx={{
-                      width: 24,
-                      height: 3,
-                      backgroundImage: `repeating-linear-gradient(90deg, ${btn.active ? btn.color : "#CBD5E1"}, ${btn.active ? btn.color : "#CBD5E1"} 6px, transparent 6px, transparent 12px)`,
-                      borderRadius: "3px",
-                      flexShrink: 0,
-                    }}
-                  />
-                ) : (
-                  <Box
-                    sx={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: "50%",
-                      backgroundColor: btn.active ? btn.color : "#D1D5DB",
-                      flexShrink: 0,
-                    }}
-                  />
-                )}
-              <Typography
-                variant="body2"
-                fontWeight={500}
+                {btn.label}
+              </Typography>
+            </Box>
+          ))}
+
+          {/* Forecast legends */}
+          {[
+            {
+              label: "Quantity Forecast",
+              color: seriesColors.quantity,
+              active: showQuantityForecast,
+              toggle: () => setShowQuantityForecast((p) => !p),
+            },
+            {
+              label: "Actual Price Forecast",
+              color: seriesColors.actual,
+              active: showActualForecast,
+              toggle: () => setShowActualForecast((p) => !p),
+            },
+            {
+              label: "Standard Price Forecast",
+              color: seriesColors.standard,
+              active: showStandardForecast,
+              toggle: () => setShowStandardForecast((p) => !p),
+            },
+          ].map((btn) => (
+            <Box
+              key={btn.label}
+              onClick={btn.toggle}
+              sx={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 0.6,
+                px: 1.2,
+                py: 0.6,
+                borderRadius: "4px",
+                cursor: "pointer",
+                backgroundColor: btn.active ? "#F8FBFF" : "#F9FAFB",
+                border: btn.active ? "1px solid #D1D5DB" : "1px solid #E5E7EB",
+                boxShadow: btn.active ? "0px 1px 3px rgba(0,0,0,0.06)" : "none",
+                transition: "all 0.2s ease",
+                "&:hover": {
+                  backgroundColor: btn.active ? "#EEF2FF" : "#F3F4F6",
+                },
+                opacity: btn.active ? 1 : 0.6,
+              }}
+            >
+              <Box
                 sx={{
+                  width: 24,
+                  height: 0,
+                  borderTop: `2px dashed ${btn.active ? btn.color : "#CBD5E1"}`,
+                  flexShrink: 0,
+                }}
+              />
+              <Typography
+                sx={{
+                  fontSize: 12,
+                  fontWeight: 500,
                   color: btn.active ? "#374151" : "#9CA3AF",
-                  fontSize: "0.8rem",
-                  lineHeight: 1.1,
+                  lineHeight: 1,
                   whiteSpace: "nowrap",
                 }}
               >
@@ -992,7 +1055,7 @@ export default function SAQ({
           ))}
         </Box>
 
-        {/* Icons on the right (same style as your Highcharts toolbar) */}
+        {/* Icons on the right */}
         <Box
           sx={{
             display: "flex",

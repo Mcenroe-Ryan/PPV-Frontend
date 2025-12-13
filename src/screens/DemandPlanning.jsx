@@ -386,9 +386,9 @@ function SavingsBySupplier() {
           color: "text.secondary",
           mb: "15px",
         }}
-              >
-                Savings by supplier in $
-              </Typography>
+      >
+        Savings by supplier in $
+      </Typography>
 
       <Stack
         direction="row"
@@ -683,7 +683,11 @@ function MultiSelectWithCheckboxes({
               const isSelected = selected.includes(val);
               const isInactive = single && selected.length === 1 && !isSelected;
               const optionLabel = option[displayKey || optionKey];
-              const starSuppliers = ["global parts inc.", "automech gumby", "bharat supplies"];
+              const starSuppliers = [
+                "global parts inc.",
+                "automech gumby",
+                "bharat supplies",
+              ];
               const showStar =
                 label === "Supplier Name" &&
                 typeof optionLabel === "string" &&
@@ -750,6 +754,7 @@ const DataVisualizationSection = ({
   skuIds = [],
   supplierIds = [],
   supplierLocations = [],
+  clearSignal = 0, // ✅ ADDED
 }) => {
   const [selectedTab, setSelectedTab] = useState(0);
   const [selectedPeriod, setSelectedPeriod] = useState("M");
@@ -758,7 +763,7 @@ const DataVisualizationSection = ({
   const [lineSeries, setLineSeries] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
 
-  const [showForecast, setShowForecast] = useState(false);
+  const [showForecast, setShowForecast] = useState(true);
   const [showAlerts, setShowAlerts] = useState(false);
   const [showGlobal, setShowGlobal] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
@@ -889,19 +894,19 @@ const DataVisualizationSection = ({
     () => hsvToHex({ h: colorPicker.hsv.h, s: 1, v: 1 }),
     [colorPicker.hsv.h]
   );
-  const satPointerLeft = `${Math.min(Math.max(colorPicker.hsv.s, 0), 1) * 100}%`;
+  const satPointerLeft = `${
+    Math.min(Math.max(colorPicker.hsv.s, 0), 1) * 100
+  }%`;
   const satPointerTop = `${
     (1 - Math.min(Math.max(colorPicker.hsv.v, 0), 1)) * 100
   }%`;
-  const normalizedHue =
-    ((colorPicker.hsv.h % 360) + 360) % 360 || 0;
+  const normalizedHue = ((colorPicker.hsv.h % 360) + 360) % 360 || 0;
   const huePointerTopPx = useMemo(() => {
     const ratio = Math.max(0, Math.min(1, normalizedHue / 360));
     return ratio * HUE_SLIDER_HEIGHT;
   }, [normalizedHue]);
   const handleColorSwatchClick = (type, key) => (event) => {
-    const current =
-      type === "overlay" ? overlayColors[key] : seriesColors[key];
+    const current = type === "overlay" ? overlayColors[key] : seriesColors[key];
     setColorPicker({
       open: true,
       type,
@@ -913,65 +918,90 @@ const DataVisualizationSection = ({
   const closeColorPicker = () =>
     setColorPicker((prev) => ({ ...prev, open: false, anchorEl: null }));
 
-const firstOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
-const buildMonthlyRange = (start, end) => {
-  const out = [];
-  const d = new Date(start.getFullYear(), start.getMonth(), 1);
-  const stop = new Date(end.getFullYear(), end.getMonth(), 1);
+  const firstOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
+  const buildMonthlyRange = (start, end) => {
+    const out = [];
+    const d = new Date(start.getFullYear(), start.getMonth(), 1);
+    const stop = new Date(end.getFullYear(), end.getMonth(), 1);
     while (d <= stop) {
       out.push(new Date(d));
       d.setMonth(d.getMonth() + 1);
-  }
-  return out;
-};
+    }
+    return out;
+  };
 
-const firstOfWeek = (d) => {
-  const date = new Date(d);
-  const normalized = startOfWeek(date, { weekStartsOn: 1 });
-  normalized.setHours(0, 0, 0, 0);
-  return normalized;
-};
+  const firstOfWeek = (d) => {
+    const date = new Date(d);
+    const normalized = startOfWeek(date, { weekStartsOn: 1 });
+    normalized.setHours(0, 0, 0, 0);
+    return normalized;
+  };
 
-const buildWeeklyRange = (start, end) => {
-  const out = [];
-  let cursor = firstOfWeek(start);
-  const stop = firstOfWeek(end);
-  while (cursor <= stop) {
-    out.push(new Date(cursor));
-    cursor = addWeeks(cursor, 1);
-  }
-  return out;
-};
+  const buildWeeklyRange = (start, end) => {
+    const out = [];
+    let cursor = firstOfWeek(start);
+    const stop = firstOfWeek(end);
+    while (cursor <= stop) {
+      out.push(new Date(cursor));
+      cursor = addWeeks(cursor, 1);
+    }
+    return out;
+  };
 
-const PERIOD_CONFIG = {
-  M: {
-    endpoint: "/getLineChart",
-    rowDateKey: "forecast_month",
-    bucketFn: firstOfMonth,
-    rangeBuilder: buildMonthlyRange,
-    formatLabel: (date) => format(date, "MMM yyyy"),
-  },
-  W: {
-    endpoint: "/getWeeklyLineChart",
-    rowDateKey: "forecast_week",
-    bucketFn: firstOfWeek,
-    rangeBuilder: buildWeeklyRange,
-    formatLabel: (date) => format(date, "yyyy-'W'II"),
-  },
-};
+  const PERIOD_CONFIG = {
+    M: {
+      endpoint: "/getLineChart",
+      rowDateKey: "forecast_month",
+      bucketFn: firstOfMonth,
+      rangeBuilder: buildMonthlyRange,
+      formatLabel: (date) => format(date, "MMM yyyy"),
+    },
+    W: {
+      endpoint: "/getWeeklyLineChart",
+      rowDateKey: "forecast_week",
+      bucketFn: firstOfWeek,
+      rangeBuilder: buildWeeklyRange,
+      formatLabel: (date) => format(date, "yyyy-'W'II"),
+    },
+  };
 
-const getPeriodConfig = (period) => PERIOD_CONFIG[period] || PERIOD_CONFIG.M;
+  const getPeriodConfig = (period) => PERIOD_CONFIG[period] || PERIOD_CONFIG.M;
 
-const formatCategoryLabelForPeriod = (period, value) => {
-  const config = getPeriodConfig(period);
-  const normalized = config.bucketFn(new Date(value));
-  return config.formatLabel(normalized);
-};
+  const formatCategoryLabelForPeriod = (period, value) => {
+    const config = getPeriodConfig(period);
+    const normalized = config.bucketFn(new Date(value));
+    return config.formatLabel(normalized);
+  };
+
+  // ✅ ADDED: clear chart + overlays when Clear Filters is clicked
+  useEffect(() => {
+    setLineCategories([]);
+    setLineSeries([]);
+    setAlertSeries([]);
+    setAlertsRaw([]);
+    setXPlotBands([]);
+    setEventsByX({});
+    setGlobalRaw([]);
+    setShowAlerts(false);
+    setShowGlobal(false);
+    // setShowForecast(false);
+  }, [clearSignal]);
 
   /* -------- Base line chart: actual before today, dotted after -------- */
 
   useEffect(() => {
     if (!startDate || !endDate) return;
+
+    // ✅ ADDED: if filters are cleared (no Plant/SKU), do not fetch; clear visuals
+    const hasEnoughFilters =
+      (Array.isArray(skuIds) && skuIds.length > 0) ||
+      (Array.isArray(plantIds) && plantIds.length > 0);
+
+    if (!hasEnoughFilters) {
+      setLineCategories([]);
+      setLineSeries([]);
+      return;
+    }
 
     const controller = new AbortController();
     const config = getPeriodConfig(selectedPeriod);
@@ -993,7 +1023,6 @@ const formatCategoryLabelForPeriod = (period, value) => {
     let effectiveEnd = endDate;
 
     if (showForecast) {
-      effectiveStart = format(pivotBucket, "yyyy-MM-dd");
       const horizonEnd = advanceBucket(pivotBucket, FORECAST_WINDOW - 1);
       effectiveEnd = format(horizonEnd, "yyyy-MM-dd");
     }
@@ -1004,13 +1033,7 @@ const formatCategoryLabelForPeriod = (period, value) => {
     const fetchChart = async () => {
       setChartLoading(true);
       try {
-        const todayBucket = normalizeDate(new Date());
-        const pastRange =
-          !showForecast &&
-          normalizedEnd &&
-          todayBucket &&
-          normalizedEnd.getTime() < todayBucket.getTime();
-        const includeForecast = showForecast || !pastRange;
+        const includeForecast = showForecast;
 
         const payload = {
           startDate: effectiveStart,
@@ -1047,24 +1070,25 @@ const formatCategoryLabelForPeriod = (period, value) => {
 
         if (!normalizedStart || !normalizedEnd) return;
 
-        // Build buckets for the selected period
         let buckets = config.rangeBuilder(normalizedStart, normalizedEnd);
 
-        const categories = buckets.map((d) => config.formatLabel(d));
+        const today = normalizeDate(new Date());
+        const filteredBuckets = showForecast
+          ? buckets 
+          : buckets.filter((d) => d.getTime() < today.getTime()); 
+
+        const categories = filteredBuckets.map((d) => config.formatLabel(d));
         setLineCategories(categories);
 
         const bucketIndexMap = new Map(
-          buckets.map((d, idx) => [d.getTime(), idx])
+          filteredBuckets.map((d, idx) => [d.getTime(), idx])
         );
 
-        // Determine the pivot bucket (current period)
-        const today = normalizeDate(new Date());
         let pivotIdx = today
-          ? buckets.findIndex((d) => d.getTime() >= today.getTime())
+          ? filteredBuckets.findIndex((d) => d.getTime() >= today.getTime())
           : -1;
-        if (pivotIdx === -1) pivotIdx = buckets.length;
+        if (pivotIdx === -1) pivotIdx = filteredBuckets.length;
 
-        // Group values by supplier as a single series
         const bySupplier = new Map();
 
         for (const r of rows) {
@@ -1078,7 +1102,7 @@ const formatCategoryLabelForPeriod = (period, value) => {
           if (!Number.isFinite(value)) continue;
 
           if (!bySupplier.has(supplier)) {
-            bySupplier.set(supplier, Array(buckets.length).fill(null));
+            bySupplier.set(supplier, Array(filteredBuckets.length).fill(null));
           }
           const arr = bySupplier.get(supplier);
           arr[idx] = value;
@@ -1112,7 +1136,8 @@ const formatCategoryLabelForPeriod = (period, value) => {
         for (const [name, values] of bySupplier.entries()) {
           const color = getColorFor(name, supplierIdx++);
 
-          const forecastData = Array(buckets.length).fill(null);
+          const forecastData = Array(filteredBuckets.length).fill(null);
+
           const normalizeForecastValue = (val) => {
             if (val == null) return null;
             if (Object.is(val, -0)) return null;
@@ -1126,7 +1151,8 @@ const formatCategoryLabelForPeriod = (period, value) => {
 
           values.forEach((value, idx) => {
             if (value == null || Number.isNaN(value)) return;
-            const isForecastBucket = idx >= pivotIdx && idx < pivotIdx + FORECAST_WINDOW;
+            const isForecastBucket =
+              idx >= pivotIdx && idx < pivotIdx + FORECAST_WINDOW;
             if (isForecastBucket) {
               forecastData[idx] = normalizeForecastValue(value);
             }
@@ -1145,7 +1171,7 @@ const formatCategoryLabelForPeriod = (period, value) => {
             });
           }
 
-          if (payload.includeForecast && forecastData.some((v) => typeof v === "number")) {
+          if (showForecast && forecastData.some((v) => typeof v === "number")) {
             seriesOut.push({
               name: `${name} Forecast`,
               type: "line",
@@ -1193,9 +1219,14 @@ const formatCategoryLabelForPeriod = (period, value) => {
     setLineSeries((prev) =>
       prev.map((series) => {
         if (series.type === "scatter") return series;
-        const baseName = series.name.replace(" (Forecast)", "");
+
+        const baseName = series.name
+          .replace(" Forecast", "")
+          .replace(" Forecast", "");
+
         const color = seriesColors[baseName];
         if (!color) return series;
+
         return { ...series, color };
       })
     );
@@ -1223,7 +1254,7 @@ const formatCategoryLabelForPeriod = (period, value) => {
 
     const baseSeriesMap = new Map(
       lineSeries
-        .filter((s) => s.type === "line" && !s.name.endsWith(" (Forecast)"))
+        .filter((s) => s.type === "line" && !s.name.endsWith(" Forecast"))
         .map((s) => [s.name, s])
     );
 
@@ -1368,15 +1399,62 @@ const formatCategoryLabelForPeriod = (period, value) => {
   const handleDownloadForecastChart = async () => {
     if (!forecastChartCaptureRef.current || chartLoading) return;
     if (downloadingForecastChart) return;
+
     try {
       setDownloadingForecastChart(true);
-      const canvas = await html2canvas(forecastChartCaptureRef.current, {
+
+      if (chartRef.current?.chart) {
+        chartRef.current.chart.reflow();
+        chartRef.current.chart.redraw();
+      }
+
+      // Wait for all rendering to complete
+      await new Promise((resolve) => setTimeout(resolve, 800));
+
+      const element = forecastChartCaptureRef.current;
+
+      const canvas = await html2canvas(element, {
         backgroundColor: "#ffffff",
-        scale: window.devicePixelRatio
-          ? Math.min(window.devicePixelRatio, 2)
-          : 2,
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        width: element.scrollWidth,
+        height: element.scrollHeight,
+        onclone: (clonedDoc) => {
+          // Force all SVG elements to be visible and properly sized
+          const chartContainer = clonedDoc.querySelector(
+            ".highcharts-container"
+          );
+          if (chartContainer) {
+            chartContainer.style.overflow = "visible";
+          }
+
+          const svgs = clonedDoc.querySelectorAll("svg");
+          svgs.forEach((svg) => {
+            svg.style.overflow = "visible";
+            svg.style.display = "block";
+          });
+
+          // Ensure all paths are visible
+          const paths = clonedDoc.querySelectorAll("path");
+          paths.forEach((path) => {
+            if (path.style.visibility === "hidden") {
+              path.style.visibility = "visible";
+            }
+          });
+
+          // Ensure all lines are visible
+          const lines = clonedDoc.querySelectorAll("line");
+          lines.forEach((line) => {
+            if (line.style.visibility === "hidden") {
+              line.style.visibility = "visible";
+            }
+          });
+        },
       });
-      const imgData = canvas.toDataURL("image/png");
+
+      const imgData = canvas.toDataURL("image/png", 1.0);
       const orientation = canvas.width >= canvas.height ? "l" : "p";
       const pdf = new jsPDF({
         orientation,
@@ -1387,6 +1465,7 @@ const formatCategoryLabelForPeriod = (period, value) => {
       pdf.save("ppv-forecast-chart.pdf");
     } catch (error) {
       console.error("Failed to download PPV forecast chart", error);
+      alert("Failed to download chart. Please try again.");
     } finally {
       setDownloadingForecastChart(false);
     }
@@ -1440,7 +1519,7 @@ const formatCategoryLabelForPeriod = (period, value) => {
   const computeChartHeight = (seriesArr) => {
     const baseNames = new Set(
       (seriesArr || [])
-        .filter((s) => s.type === "line" && !s.name.endsWith(" (Forecast)"))
+        .filter((s) => s.type === "line" && !s.name.endsWith(" Forecast"))
         .map((s) => s.name)
     );
     const baseCount = Math.max(1, baseNames.size);
@@ -1463,7 +1542,10 @@ const formatCategoryLabelForPeriod = (period, value) => {
     const intMin = Math.floor(min);
     const intMax = Math.ceil(max);
     const intSpan = Math.max(1, intMax - intMin);
-    const intStep = Math.max(1, Math.ceil(intSpan / Math.max(1, tickAmount - 1)));
+    const intStep = Math.max(
+      1,
+      Math.ceil(intSpan / Math.max(1, tickAmount - 1))
+    );
     const tickPositions = [];
     for (let v = intMin; v <= intMax; v += intStep) {
       tickPositions.push(v);
@@ -1477,6 +1559,7 @@ const formatCategoryLabelForPeriod = (period, value) => {
         spacing: [10, 16, 16, 16],
         backgroundColor: "transparent",
         zoomType: "x",
+        animation: false,
         resetZoomButton: {
           position: { align: "right", verticalAlign: "top", x: -10, y: 10 },
           theme: {
@@ -1560,13 +1643,14 @@ const formatCategoryLabelForPeriod = (period, value) => {
         verticalAlign: "top",
         layout: "horizontal",
         floating: false,
+        alignColumns: false,
         padding: 0,
         margin: 14,
         useHTML: true,
         symbolWidth: 0,
         symbolHeight: 0,
-        itemDistance: 8,
-        itemMarginTop: 0,
+        itemDistance: 4,
+        itemMarginTop: 2,
         itemMarginBottom: 0,
         labelFormatter: function () {
           const color = this.color || "#4b5563";
@@ -1577,11 +1661,9 @@ const formatCategoryLabelForPeriod = (period, value) => {
             (this.options &&
               this.options.dashStyle &&
               this.options.dashStyle !== "Solid") ||
-            name.endsWith(" (Forecast)");
+            name.endsWith(" Forecast") ||
+            name.endsWith(" Forecast");
 
-          // Indicator HTML:
-          //  - normal series: round dot
-          //  - forecast series: small dashed line
           const indicator = isForecast
             ? `
         <span
@@ -1663,7 +1745,6 @@ const formatCategoryLabelForPeriod = (period, value) => {
           if (!pts.length) return "";
 
           const lines = pts.map((p) => {
-            // Scatter = Alerts layer
             if (p.series.type === "scatter") {
               const c = p.point?.custom || {};
               return `${c.emoji || "⚠️"} <b>${c.severity || "Alert"}</b> — ${
@@ -1673,17 +1754,15 @@ const formatCategoryLabelForPeriod = (period, value) => {
               }</span>`;
             }
 
-            // Line series (actual vs forecast) – WITH VALUES, NO HEADER
-            const isForecast = p.series.name.endsWith(" (Forecast)");
+            const isForecast = p.series.name.endsWith(" Forecast");
             const baseName = isForecast
-              ? p.series.name.replace(" (Forecast)", "")
+              ? p.series.name.replace(" Forecast", "")
               : p.series.name;
-            const disp = isForecast ? `${baseName} (Forecast)` : baseName;
+            const disp = isForecast ? `${baseName} Forecast` : baseName;
 
             return `<span style="color:${p.color}">●</span> ${disp}: <b>${p.y}%</b>`;
           });
 
-          // Global events block (kept as-is)
           if (showGlobal && pts.length) {
             const firstPoint = pts[0];
             const xIdx =
@@ -1705,7 +1784,6 @@ const formatCategoryLabelForPeriod = (period, value) => {
             }
           }
 
-          // No header → no "8" / index / category line
           return lines.join("<br/>");
         },
       },
@@ -1751,7 +1829,14 @@ const formatCategoryLabelForPeriod = (period, value) => {
         ],
       },
     };
-  }, [lineCategories, combinedSeries, showGlobal, xPlotBands, eventsByX, showGridLines]);
+  }, [
+    lineCategories,
+    combinedSeries,
+    showGlobal,
+    xPlotBands,
+    eventsByX,
+    showGridLines,
+  ]);
 
   useLayoutEffect(() => {
     chartRef.current?.chart?.reflow?.();
@@ -1836,7 +1921,8 @@ const formatCategoryLabelForPeriod = (period, value) => {
                   flexWrap="wrap"
                 >
                   <Stack direction="row" spacing={1.25}>
-                    {["W", "M", "Q"].map((p) => (
+                    {/* {["W", "M", "Q"].map((p) => ( */}
+                    {["W", "M"].map((p) => (
                       <Box
                         key={p}
                         sx={{
@@ -1873,24 +1959,22 @@ const formatCategoryLabelForPeriod = (period, value) => {
                     ))}
                   </Stack>
 
-                  <Stack direction="row" spacing={1.25} alignItems="center">
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={showForecast}
-                          onChange={(e) => setShowForecast(e.target.checked)}
-                        />
-                      }
-                      label="6 Months Forecast"
-                      sx={{
-                        "& .MuiFormControlLabel-label": {
-                          fontSize: "14px",
-                          color: "text.primary",
-                        },
-                      }}
-                    />
-                    <KeyboardArrowDownIcon sx={{ width: 16, height: 16 }} />
-                  </Stack>
+                  {/* <Stack direction="row" spacing={1.25} alignItems="center">  ← DELETE THIS LINE */}
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={showForecast}
+                        onChange={(e) => setShowForecast(e.target.checked)}
+                      />
+                    }
+                    label="6 Months Forecast"
+                    sx={{
+                      "& .MuiFormControlLabel-label": {
+                        fontSize: "14px",
+                        color: "text.primary",
+                      },
+                    }}
+                  />
 
                   <FormControlLabel
                     control={
@@ -1926,7 +2010,6 @@ const formatCategoryLabelForPeriod = (period, value) => {
                 </Stack>
               </Stack>
 
-              {/* 🔹 Icons opposite to Alerts checkbox (top-right) */}
               <Box
                 sx={{
                   position: "absolute",
@@ -1978,6 +2061,7 @@ const formatCategoryLabelForPeriod = (period, value) => {
             <Divider sx={{ my: 1.25 }} />
 
             <SupplierDataTableSection
+              clearSignal={clearSignal} // ✅ ADDED
               startDate={startDate}
               endDate={endDate}
               countryIds={countryIds}
@@ -2041,11 +2125,20 @@ const formatCategoryLabelForPeriod = (period, value) => {
         PaperProps={{ sx: { width: 320, p: 3 } }}
       >
         <Stack spacing={2}>
-          <Stack direction="row" alignItems="center" justifyContent="space-between">
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+          >
             <Stack direction="row" spacing={1} alignItems="center">
               <SettingsIcon sx={{ color: "#6b7280", fontSize: 18 }} />
               <Typography
-                sx={{ fontWeight: 700, fontSize: 16, color: "#4b5563", letterSpacing: 0.2 }}
+                sx={{
+                  fontWeight: 700,
+                  fontSize: 16,
+                  color: "#4b5563",
+                  letterSpacing: 0.2,
+                }}
               >
                 Graph Configuration
               </Typography>
@@ -2366,6 +2459,7 @@ const SupplierDataTableSection = ({
   supplierIds = [],
   supplierLocations = [],
   selectedPeriod = "M",
+  clearSignal = 0, // ✅ ADDED
 }) => {
   const [rows, setRows] = useState([]);
   const [columns, setColumns] = useState([]);
@@ -2373,6 +2467,13 @@ const SupplierDataTableSection = ({
   const [loading, setLoading] = useState(false);
 
   const COL_PX = 72;
+
+  // ✅ ADDED: Clear table immediately when Clear Filters is clicked
+  useEffect(() => {
+    setRows([]);
+    setColumns([]);
+    setYearGroups([]);
+  }, [clearSignal]);
 
   const parseHeatmapLabelToDate = (label) => {
     if (!label) return null;
@@ -2415,6 +2516,18 @@ const SupplierDataTableSection = ({
 
   useEffect(() => {
     const load = async () => {
+      // ✅ ADDED: if filters are cleared (no Plant/SKU), do not fetch; keep empty table
+      const hasEnoughFilters =
+        (Array.isArray(skuIds) && skuIds.length > 0) ||
+        (Array.isArray(plantIds) && plantIds.length > 0);
+
+      if (!hasEnoughFilters) {
+        setRows([]);
+        setColumns([]);
+        setYearGroups([]);
+        return;
+      }
+
       setLoading(true);
       try {
         const payload = {
@@ -2758,6 +2871,8 @@ export const DemandProjectMonth = () => {
     endDate: format(addMonths(new Date("2025-12-31"), 6), "yyyy-MM-dd"),
   });
 
+  const [clearSignal, setClearSignal] = useState(0);
+
   const [filtersData, setFiltersData] = useState({
     countries: [],
     states: [],
@@ -2971,7 +3086,6 @@ export const DemandProjectMonth = () => {
       supplierLocations: [],
     }));
 
-    // Auto-load SKUs when plants are selected (helps default cascade & UX)
     if (selectedPlants.length) {
       fetchSkus();
     }
@@ -3006,7 +3120,6 @@ export const DemandProjectMonth = () => {
     setFiltersData((prev) => ({ ...prev, supplierLocations: [] }));
   }, [selectedSKUs]);
 
-  // Auto-fetch suppliers when SKUs are selected (to support default cascade)
   useEffect(() => {
     if (selectedSKUs.length && !filtersData.suppliers.length) {
       fetchSuppliers();
@@ -3016,32 +3129,29 @@ export const DemandProjectMonth = () => {
   /* -------- SUPPLIER LOCATIONS (depend on SKU / suppliers list) -------- */
 
   const fetchSupplierLocations = () => {
-  if (!selectedSKUs.length) return;
+    if (!selectedSKUs.length) return;
 
-  const allSuppliers = filtersData.suppliers || [];
-  if (!allSuppliers.length) return;
+    const allSuppliers = filtersData.suppliers || [];
+    if (!allSuppliers.length) return;
 
-  const countries = Array.from(
-    new Set(
-      allSuppliers
-        .map((s) => String(s.supplier_country || "").trim())
-        .filter(Boolean)
-    )
-  );
+    const countries = Array.from(
+      new Set(
+        allSuppliers
+          .map((s) => String(s.supplier_country || "").trim())
+          .filter(Boolean)
+      )
+    );
 
-  const locationOptions = countries.map((c) => ({
-    supplier_location: c,
-  }));
+    const locationOptions = countries.map((c) => ({
+      supplier_location: c,
+    }));
 
-  setFiltersData((prev) => ({
-    ...prev,
-    supplierLocations: locationOptions,
-  }));
+    setFiltersData((prev) => ({
+      ...prev,
+      supplierLocations: locationOptions,
+    }));
+  };
 
-};
-
-
-  // 🔹 Auto-populate Supplier Location (USA) once suppliers are loaded, same as other defaults
   useEffect(() => {
     if (!selectedSKUs.length) return;
     if (!filtersData.suppliers.length) return;
@@ -3056,7 +3166,6 @@ export const DemandProjectMonth = () => {
     selectedSupplierLocations,
   ]);
 
-  // When supplier location changes, reset suppliers (supplier depends on location)
   useEffect(() => {
     setSelectedSuppliers([]);
   }, [selectedSupplierLocations]);
@@ -3096,7 +3205,6 @@ export const DemandProjectMonth = () => {
   useEffect(() => {
     if (initializedDefaults) return;
 
-    // 1. Country -> United States of America
     if (!selectedCountry.length && filtersData.countries.length) {
       const us = filtersData.countries.find(
         (c) =>
@@ -3105,11 +3213,10 @@ export const DemandProjectMonth = () => {
       );
       if (us) {
         setSelectedCountry([us.country_id]);
-        return; // wait for states to load
+        return;
       }
     }
 
-    // 2. State -> Illinois
     if (
       selectedCountry.length &&
       !selectedState.length &&
@@ -3120,11 +3227,10 @@ export const DemandProjectMonth = () => {
       );
       if (il) {
         setSelectedState([il.state_id]);
-        return; // wait for plants to load
+        return;
       }
     }
 
-    // 3. Plant -> Chicago Tyre Plant 09
     if (
       selectedState.length &&
       !selectedPlants.length &&
@@ -3135,11 +3241,10 @@ export const DemandProjectMonth = () => {
       );
       if (plant) {
         setSelectedPlants([plant.plant_id]);
-        return; // wait for SKUs to load
+        return;
       }
     }
 
-    // 4. SKU -> PCR-185/65R15
     if (
       selectedPlants.length &&
       !selectedSKUs.length &&
@@ -3148,11 +3253,10 @@ export const DemandProjectMonth = () => {
       const sku = filtersData.skus.find((s) => s.sku_code === "PCR-185/65R15");
       if (sku) {
         setSelectedSKUs([sku.sku_id]);
-        return; // wait for suppliers to load if needed
+        return;
       }
     }
 
-    // ✅ Stop default cascade at SKU (do NOT auto-select supplier/location)
     if (
       selectedCountry.length &&
       selectedState.length &&
@@ -3199,6 +3303,9 @@ export const DemandProjectMonth = () => {
     });
     setDateFilterKey((k) => k + 1);
 
+    // ✅ ADDED: clear chart + table immediately
+    setClearSignal((s) => s + 1);
+
     // If you want defaults to re-apply after Clear Filters, uncomment:
     // setInitializedDefaults(false);
     // fetchCountries();
@@ -3209,37 +3316,26 @@ export const DemandProjectMonth = () => {
   const effectiveSupplierIds = useMemo(() => {
     const allSuppliers = filtersData.suppliers || [];
 
-    // 🔹 Case 1: no locations selected → show all locations
     if (!selectedSupplierLocations.length) {
-      // but if user has explicitly picked supplier names, respect that
       if (selectedSuppliers.length) return selectedSuppliers;
-      // empty array => backend interprets as "no supplier filter"
       return [];
     }
 
-    // 🔹 Case 2: one or more locations selected → only those locations
     const locSet = new Set(
       selectedSupplierLocations.map((loc) => String(loc).toLowerCase())
     );
 
     const byLocation = allSuppliers
-      .filter((s) =>
-        locSet.has(String(s.supplier_country || "").toLowerCase())
-      )
+      .filter((s) => locSet.has(String(s.supplier_country || "").toLowerCase()))
       .map((s) => s.supplier_id);
 
-    // If user also selected supplier names, intersect the two
     if (selectedSuppliers.length) {
       const chosenSet = new Set(selectedSuppliers);
       return byLocation.filter((id) => chosenSet.has(id));
     }
 
     return byLocation;
-  }, [
-    filtersData.suppliers,
-    selectedSupplierLocations,
-    selectedSuppliers,
-  ]);
+  }, [filtersData.suppliers, selectedSupplierLocations, selectedSuppliers]);
 
   const supplierOptions = useMemo(() => {
     const all = filtersData.suppliers || [];
@@ -3372,7 +3468,7 @@ export const DemandProjectMonth = () => {
             width={24}
             height={20}
             sx={{ cursor: "pointer" }}
-            onClick={handleChatBubbleClick} // 👈 add this
+            onClick={handleChatBubbleClick}
           >
             <ChatBubbleOutline sx={{ width: 20, height: 20, color: "white" }} />
             <Box
@@ -3471,7 +3567,6 @@ export const DemandProjectMonth = () => {
             single
           />
 
-          {/* Supplier Location first, depends on SKU */}
           <MultiSelectWithCheckboxes
             label="Supplier Location"
             options={filtersData.supplierLocations}
@@ -3485,7 +3580,6 @@ export const DemandProjectMonth = () => {
             onOpen={fetchSupplierLocations}
           />
 
-          {/* Suppliers now depend on Supplier Location */}
           <MultiSelectWithCheckboxes
             label="Supplier Name"
             options={supplierOptions}
@@ -3547,19 +3641,19 @@ export const DemandProjectMonth = () => {
         sx={{ bgcolor: "#EFF6FF", minHeight: "calc(100vh - 56px)", p: 1.25 }}
       >
         <DataVisualizationSection
+          clearSignal={clearSignal} // ✅ ADDED
           startDate={dateRange.startDate}
           endDate={dateRange.endDate}
           countryIds={selectedCountry}
           stateIds={selectedState}
           plantIds={selectedPlants}
           skuIds={selectedSKUs}
-          // supplierIds={selectedSuppliers}
           supplierIds={effectiveSupplierIds}
           supplierLocations={selectedSupplierLocations}
           savingsCards={loadingSavings ? [] : savingsCards}
         />
       </Box>
-      {/* Messaging side panel (same as old ChartMessage behavior) */}
+
       {showActivities && (
         <Box
           sx={{
@@ -3590,7 +3684,6 @@ export const DemandProjectMonth = () => {
         </Box>
       )}
 
-      {/* Chatbot Dialog */}
       <Dialog
         open={isChatBotOpen}
         onClose={handleCloseChatBot}
