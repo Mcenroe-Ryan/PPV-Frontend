@@ -156,16 +156,27 @@ const DEFAULT_SAQ_FILTERS = {
 
 const num = (v) => (Number.isFinite(+v) ? +v : 0);
 
+const parseLocalYmd = (iso) => {
+  if (typeof iso === "string") {
+    const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      const [, y, m, d] = match;
+      return new Date(Number(y), Number(m) - 1, Number(d), 0, 0, 0, 0);
+    }
+  }
+  return new Date(iso);
+};
+
 const compareDateOnly = (a, b) =>
-  new Date(a).setHours(0, 0, 0, 0) - new Date(b).setHours(0, 0, 0, 0);
+  parseLocalYmd(a).setHours(0, 0, 0, 0) - parseLocalYmd(b).setHours(0, 0, 0, 0);
 
 const today = new Date();
-const isHistorical = (iso) => new Date(iso) < today;
+const isHistorical = (iso) => parseLocalYmd(iso) < today;
 
 const monthShort = (iso) =>
-  new Date(iso).toLocaleString("en-US", { month: "short" });
+  parseLocalYmd(iso).toLocaleString("en-US", { month: "short" });
 
-const yearNum = (iso) => new Date(iso).getFullYear();
+const yearNum = (iso) => parseLocalYmd(iso).getFullYear();
 
 function ForecastBarShape({ x, y, width, height, fill }) {
   if (height <= 0 || !Number.isFinite(height)) return null;
@@ -238,15 +249,36 @@ const formatXAxisLabel = (d, idx, arr) => {
 
 const TOOLTIP_ORDER = {
   "Actual Price": 0,
-  "Standard Price": 1,
-  Quantity: 2,
+  "Actual Price Forecast": 1,
+  "Standard Price": 2,
+  "Standard Price Forecast": 3,
+  Quantity: 4,
+  "Quantity Forecast": 5,
+};
+
+const dedupeForecastPayload = (items = []) => {
+  const keepByBase = new Map();
+
+  items.forEach((it) => {
+    const name = it?.name || "";
+    const isForecast = /forecast/i.test(name);
+    const base = name.replace(/ forecast/i, "");
+
+    const existing = keepByBase.get(base);
+    if (!existing || (existing.isForecast && !isForecast)) {
+      keepByBase.set(base, { item: it, isForecast });
+    }
+  });
+
+  return Array.from(keepByBase.values()).map((v) => v.item);
 };
 
 const ChartTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
+  const deduped = dedupeForecastPayload(payload);
   const seen = new Set();
   const uniquePayload = [];
-  payload.forEach((item) => {
+  deduped.forEach((item) => {
     const key = item?.name;
     if (!key || seen.has(key)) return;
     seen.add(key);
@@ -306,6 +338,8 @@ export default function SAQ({
   plantIds,
   countryIds,
   stateIds,
+  clearSignal = 0,
+  hasFilters = true,
 }) {
   const [gran] = useState("m");
   const [loading, setLoading] = useState(true);
@@ -389,6 +423,7 @@ export default function SAQ({
   const hueRef = useRef(null);
   const dragState = useRef({ mode: null });
   const chartCaptureRef = useRef(null);
+  const downloadRef = useRef(null);
   const applyPickedColor = (nextHsv, target = colorPicker) => {
     const hex = hsvToHex(nextHsv);
     setSeriesColors((prev) => ({ ...prev, [target.key]: hex }));
@@ -532,6 +567,8 @@ export default function SAQ({
   /* =======================  EFFECTIVE FILTERS (WITH DEFAULTS)  ======================= */
 
   const effectiveFilters = useMemo(() => {
+    if (!hasFilters) return null;
+
     const safeArrayOrDefault = (value, defaultArr) => {
       if (Array.isArray(value) && value.length > 0) return value;
       return defaultArr;
@@ -552,11 +589,31 @@ export default function SAQ({
       stateIds: safeArrayOrDefault(stateIds, DEFAULT_SAQ_FILTERS.stateIds),
       plantIds: safeArrayOrDefault(plantIds, DEFAULT_SAQ_FILTERS.plantIds),
     };
-  }, [startDate, endDate, supplierIds, skuIds, plantIds, countryIds, stateIds]);
+  }, [
+    startDate,
+    endDate,
+    supplierIds,
+    skuIds,
+    plantIds,
+    countryIds,
+    stateIds,
+    hasFilters,
+  ]);
+
+  useEffect(() => {
+    setRows([]);
+    setLoading(false);
+  }, [clearSignal]);
 
   /* ============================  FETCH DATA  =============================== */
 
   useEffect(() => {
+    if (!effectiveFilters) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
+
     const {
       startDate: effStart,
       endDate: effEnd,
@@ -609,7 +666,11 @@ export default function SAQ({
               }))
             : [];
 
-        setRows(formatted);
+        const filtered = formatted.filter(
+          (item) => compareDateOnly(item.date_value, effStart) >= 0
+        );
+
+        setRows(filtered);
       } catch (error) {
         console.error("❌ Error fetching SAQ chart:", error);
         setRows([]);
@@ -838,7 +899,7 @@ export default function SAQ({
                 <>
                   <Line
                     yAxisId="left"
-                    type="linear"
+                    type="monotone"
                     dataKey="standard_hist"
                     name="Standard Price"
                     stroke={seriesColors.standard}
@@ -849,7 +910,7 @@ export default function SAQ({
                   {showStandardForecast && (
                     <Line
                       yAxisId="left"
-                      type="linear"
+                      type="monotone"
                       dataKey="standard_fore"
                       name="Standard Price Forecast"
                       stroke={seriesColors.standard}
@@ -866,7 +927,7 @@ export default function SAQ({
                 <>
                   <Line
                     yAxisId="left"
-                    type="linear"
+                    type="monotone"
                     dataKey="actual_hist"
                     name="Actual Price"
                     stroke={seriesColors.actual}
@@ -877,7 +938,7 @@ export default function SAQ({
                   {showActualForecast && (
                     <Line
                       yAxisId="left"
-                      type="linear"
+                      type="monotone"
                       dataKey="actual_fore"
                       name="Actual Price Forecast"
                       stroke={seriesColors.actual}
@@ -905,18 +966,20 @@ export default function SAQ({
 
   return (
     <Box sx={{ pt: 1.3, px: 2, pb: 2, fontFamily: FONT_MONO }}>
-      {/* Metric + Forecast legends + Top-right Icons */}
-      <Box
-        sx={{
-          mt: 1,
-          mb: 1.5,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 2,
-          flexWrap: "wrap",
-        }}
-      >
+      <Box ref={chartCaptureRef} sx={{ width: "100%" }}>
+        {/* Metric + Forecast legends + Top-right Icons */}
+        {hasFilters && (
+          <Box
+            sx={{
+              mt: 1,
+              mb: 1.5,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 2,
+              flexWrap: "wrap",
+            }}
+          >
         {/* Legend-like metric toggles + forecast chips (left) */}
         <Box
           sx={{
@@ -1085,20 +1148,22 @@ export default function SAQ({
           </IconButton>
         </Box>
       </Box>
+      )}
 
-      {/* Chart */}
-      <Paper variant="outlined" sx={{ mt: 2, p: 2, borderRadius: 2 }}>
-        <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>
-          <IconButton
-            size="small"
-            onClick={() => setFullscreen(true)}
-            aria-label="Fullscreen chart"
-          >
-            <FullscreenIcon fontSize="small" />
-          </IconButton>
-        </Box>
-        <Box ref={chartCaptureRef}>{renderChartContent()}</Box>
-      </Paper>
+        {/* Chart */}
+        <Paper variant="outlined" sx={{ mt: 2, p: 2, borderRadius: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>
+            <IconButton
+              size="small"
+              onClick={() => setFullscreen(true)}
+              aria-label="Fullscreen chart"
+            >
+              <FullscreenIcon fontSize="small" />
+            </IconButton>
+          </Box>
+          <Box>{renderChartContent()}</Box>
+        </Paper>
+      </Box>
 
       {/* Fullscreen dialog */}
       <Dialog fullScreen open={fullscreen} onClose={() => setFullscreen(false)}>

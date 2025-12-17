@@ -363,10 +363,66 @@ const sortSuppliersBySavings = (data) =>
     }),
   }));
 
-function SavingsBySupplier() {
+function SavingsBySupplier({
+  hasFilters = true,
+  selectedLocations = [],
+  allowedSupplierNames = [],
+}) {
   const [suppliers, setSuppliers] = useState(() =>
     sortSuppliersBySavings(SAVINGS_SUPPLIER_DATA)
   );
+
+  useEffect(() => {
+    const normalizeText = (val) => String(val || "").trim().toLowerCase();
+    const normalizeName = (val) =>
+      normalizeText(val)
+        .replace(/\bsupplies\b/g, "supplier")
+        .replace(/\bsuppliers\b/g, "supplier");
+    const normalizeLocation = (val) => {
+      const base = normalizeText(val);
+      if (
+        base === "us" ||
+        base === "u.s" ||
+        base === "u.s." ||
+        base === "usa" ||
+        base === "united states" ||
+        base === "united states of america"
+      ) {
+        return "usa";
+      }
+      return base;
+    };
+
+    const locationSet = new Set(
+      (selectedLocations || []).map(normalizeLocation).filter(Boolean)
+    );
+    const allowedNameSet = new Set(
+      (allowedSupplierNames || []).map(normalizeName).filter(Boolean)
+    );
+
+    if (!locationSet.size && !allowedNameSet.size) {
+      setSuppliers(sortSuppliersBySavings(SAVINGS_SUPPLIER_DATA));
+      return;
+    }
+
+    const filtered = SAVINGS_SUPPLIER_DATA.map((country) => {
+      const matchesLocation =
+        !locationSet.size ||
+        locationSet.has(normalizeLocation(country.country));
+      if (!matchesLocation) return null;
+
+      const suppliersForCountry = (country.suppliers || []).filter(
+        (s) =>
+          !allowedNameSet.size || allowedNameSet.has(normalizeName(s.name))
+      );
+
+      if (!suppliersForCountry.length) return null;
+
+      return { ...country, suppliers: suppliersForCountry };
+    }).filter(Boolean);
+
+    setSuppliers(sortSuppliersBySavings(filtered));
+  }, [selectedLocations, allowedSupplierNames]);
 
   const handleCheckboxChange = () => {};
 
@@ -390,108 +446,123 @@ function SavingsBySupplier() {
         Savings by supplier in $
       </Typography>
 
-      <Stack
-        direction="row"
-        spacing={2.5}
-        divider={<Divider orientation="vertical" flexItem />}
-      >
-        {suppliers.map((countryData, countryIndex) => (
-          <Stack
-            key={countryData.country}
-            spacing="15px"
-            sx={{ minWidth: "286px" }}
+      {!hasFilters || suppliers.length === 0 ? (
+        <Box sx={{ px: 1, py: 1.5 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              fontFamily: "Poppins, Helvetica",
+              fontWeight: 500,
+              color: "text.secondary",
+            }}
           >
-            <Stack direction="row" spacing={1.25} alignItems="center">
-              <Box
-                component="img"
-                src={countryData.flagUrl}
-                alt={countryData.country}
-                sx={{ width: 24, height: 16, objectFit: "cover" }}
-              />
-              <Typography
-                variant="body1"
-                sx={{
-                  fontWeight: 500,
-                  color: "text.secondary",
-                }}
-              >
-                {countryData.country}
-              </Typography>
-            </Stack>
-
-            <Divider />
-
-            {countryData.suppliers.map((supplier, supplierIndex) => (
-              <Box
-                key={supplier.id}
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  p: "5px",
-                  borderRadius: "5px",
-                }}
-              >
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Box
-                    sx={{
-                      width: 18,
-                      display: "flex",
-                      justifyContent: "center",
-                      alignItems: "center",
-                    }}
-                  >
-                    {supplier.highlight ? (
-                      <Typography
-                        sx={{
-                          color: "#facc15",
-                          fontSize: 16,
-                          fontWeight: 700,
-                          lineHeight: 1,
-                        }}
-                      >
-                        ★
-                      </Typography>
-                    ) : (
-                      <Box sx={{ width: 12, height: 12 }} />
-                    )}
-                  </Box>
-                  <Avatar
-                    src={supplier.logoUrl}
-                    alt={supplier.name}
-                    sx={{ width: 30, height: 30 }}
-                  />
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      fontFamily: "Poppins, Helvetica",
-                      fontWeight: 500,
-                      color: "rgba(0, 0, 0, 0.5)",
-                      fontSize: "14px",
-                      lineHeight: "24px",
-                    }}
-                  >
-                    {supplier.name}
-                  </Typography>
-                </Stack>
-
+            No supplier data.
+          </Typography>
+        </Box>
+      ) : (
+        <Stack
+          direction="row"
+          spacing={2.5}
+          divider={<Divider orientation="vertical" flexItem />}
+        >
+          {suppliers.map((countryData, countryIndex) => (
+            <Stack
+              key={countryData.country}
+              spacing="15px"
+              sx={{ minWidth: "286px" }}
+            >
+              <Stack direction="row" spacing={1.25} alignItems="center">
+                <Box
+                  component="img"
+                  src={countryData.flagUrl}
+                  alt={countryData.country}
+                  sx={{ width: 24, height: 16, objectFit: "cover" }}
+                />
                 <Typography
                   variant="body1"
                   sx={{
-                    fontFamily: "Poppins, Helvetica",
                     fontWeight: 500,
-                    color: supplier.isPositive ? "#16A34A" : "#EF4444",
-                    fontSize: "16px",
-                    lineHeight: "22px",
+                    color: "text.secondary",
                   }}
                 >
-                  {supplier.savings}
+                  {countryData.country}
                 </Typography>
-              </Box>
-            ))}
-          </Stack>
-        ))}
-      </Stack>
+              </Stack>
+
+              <Divider />
+
+              {countryData.suppliers.map((supplier, supplierIndex) => (
+                <Box
+                  key={supplier.id}
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    p: "5px",
+                    borderRadius: "5px",
+                  }}
+                >
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Box
+                      sx={{
+                        width: 18,
+                        display: "flex",
+                        justifyContent: "center",
+                        alignItems: "center",
+                      }}
+                    >
+                      {supplier.highlight ? (
+                        <Typography
+                          sx={{
+                            color: "#facc15",
+                            fontSize: 16,
+                            fontWeight: 700,
+                            lineHeight: 1,
+                          }}
+                        >
+                          ★
+                        </Typography>
+                      ) : (
+                        <Box sx={{ width: 12, height: 12 }} />
+                      )}
+                    </Box>
+                    <Avatar
+                      src={supplier.logoUrl}
+                      alt={supplier.name}
+                      sx={{ width: 30, height: 30 }}
+                    />
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontFamily: "Poppins, Helvetica",
+                        fontWeight: 500,
+                        color: "rgba(0, 0, 0, 0.5)",
+                        fontSize: "14px",
+                        lineHeight: "24px",
+                      }}
+                    >
+                      {supplier.name}
+                    </Typography>
+                  </Stack>
+
+                  <Typography
+                    variant="body1"
+                    sx={{
+                      fontFamily: "Poppins, Helvetica",
+                      fontWeight: 500,
+                      color: supplier.isPositive ? "#16A34A" : "#EF4444",
+                      fontSize: "16px",
+                      lineHeight: "22px",
+                    }}
+                  >
+                    {supplier.savings}
+                  </Typography>
+                </Box>
+              ))}
+            </Stack>
+          ))}
+        </Stack>
+      )}
     </Box>
   );
 }
@@ -754,6 +825,7 @@ const DataVisualizationSection = ({
   skuIds = [],
   supplierIds = [],
   supplierLocations = [],
+  allowedSupplierNames = [],
   clearSignal = 0, // ✅ ADDED
 }) => {
   const [selectedTab, setSelectedTab] = useState(0);
@@ -772,6 +844,7 @@ const DataVisualizationSection = ({
   const [overlayColors, setOverlayColors] = useState(DEFAULT_OVERLAY_COLORS);
   const [downloadingForecastChart, setDownloadingForecastChart] =
     useState(false);
+  const [exportingCapture, setExportingCapture] = useState(false);
   const HUE_SLIDER_HEIGHT = 140;
   const [colorPicker, setColorPicker] = useState({
     open: false,
@@ -780,6 +853,14 @@ const DataVisualizationSection = ({
     anchorEl: null,
     hsv: { h: 0, s: 0, v: 1 },
   });
+  const hasSupplierFilters =
+    (Array.isArray(countryIds) && countryIds.length > 0) ||
+    (Array.isArray(stateIds) && stateIds.length > 0) ||
+    (Array.isArray(plantIds) && plantIds.length > 0) ||
+    (Array.isArray(skuIds) && skuIds.length > 0) ||
+    (Array.isArray(supplierIds) && supplierIds.length > 0) ||
+    (Array.isArray(supplierLocations) && supplierLocations.length > 0);
+  const hasSaqFilters = hasSupplierFilters;
   const satRef = useRef(null);
   const hueRef = useRef(null);
   const dragState = useRef({ mode: null });
@@ -1011,7 +1092,33 @@ const DataVisualizationSection = ({
 
     const normalizeDate = (value) => {
       if (!value) return null;
-      const d = value instanceof Date ? new Date(value) : new Date(value);
+      let d = null;
+
+      if (typeof value === "string") {
+        const m = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (m) {
+          const [_, y, mo, da] = m;
+          const local = new Date(
+            Number(y),
+            Number(mo) - 1,
+            Number(da),
+            0,
+            0,
+            0,
+            0
+          );
+          if (!Number.isNaN(local.getTime())) d = local;
+        }
+        if (!d) {
+          const parsed = parse(value, "yyyy-MM-dd", new Date());
+          if (isValid(parsed)) d = parsed;
+        }
+      }
+
+      if (!d) {
+        d = value instanceof Date ? new Date(value) : new Date(value);
+      }
+
       if (Number.isNaN(d.getTime())) return null;
       const normalized = config.bucketFn(d);
       return Number.isNaN(normalized.getTime()) ? null : normalized;
@@ -1022,9 +1129,16 @@ const DataVisualizationSection = ({
     let effectiveStart = startDate;
     let effectiveEnd = endDate;
 
+    // Respect selected endDate; only extend when there is no end date chosen
     if (showForecast) {
       const horizonEnd = advanceBucket(pivotBucket, FORECAST_WINDOW - 1);
-      effectiveEnd = format(horizonEnd, "yyyy-MM-dd");
+      const userEnd = normalizeDate(endDate);
+      if (!userEnd) {
+        effectiveEnd = format(horizonEnd, "yyyy-MM-dd");
+      } else {
+        const cappedEnd = horizonEnd && horizonEnd < userEnd ? horizonEnd : userEnd;
+        effectiveEnd = format(cappedEnd, "yyyy-MM-dd");
+      }
     }
 
     let normalizedStart = normalizeDate(effectiveStart);
@@ -1132,8 +1246,13 @@ const DataVisualizationSection = ({
           },
         };
 
+        const allowedNameSet = new Set(
+          (allowedSupplierNames || []).map((n) => String(n || "").trim())
+        );
+
         let supplierIdx = 0;
         for (const [name, values] of bySupplier.entries()) {
+          if (allowedNameSet.size && !allowedNameSet.has(name)) continue;
           const color = getColorFor(name, supplierIdx++);
 
           const forecastData = Array(filteredBuckets.length).fill(null);
@@ -1213,6 +1332,7 @@ const DataVisualizationSection = ({
     supplierLocations,
     showForecast,
     selectedPeriod,
+    allowedSupplierNames,
   ]);
 
   useEffect(() => {
@@ -1234,10 +1354,46 @@ const DataVisualizationSection = ({
 
   /* -------- Alerts overlay -------- */
 
-  const fetchAlerts = async () => {
+  const fetchAlerts = async (period = "M") => {
     try {
-      const { data } = await axios.get(`${API_BASE_URL}/getAlerts`);
-      setAlertsRaw(Array.isArray(data) ? data : []);
+      if (period === "M") {
+        const { data } = await axios.get(
+          `${API_BASE_URL}/alerts/current-month-negative-ppv`
+        );
+        const rows = Array.isArray(data) ? data : [];
+        const monthStart = new Date();
+        monthStart.setDate(1);
+        monthStart.setHours(0, 0, 0, 0);
+        const iso = monthStart.toISOString().slice(0, 10);
+
+        const mapped = rows.map((r) => ({
+          alert_type: r.alert_status || "Negative Variance",
+          date_value: iso,
+          severity: "Critical",
+          tooltip: `Avg variance: ${r.avg_variance_pct}% | Total: ${r.total_variance_amt}`,
+          supplier_name: r.supplier_name,
+          marker_color_emoji: "🔴",
+        }));
+        setAlertsRaw(mapped);
+      } else if (period === "W") {
+        const { data } = await axios.get(
+          `${API_BASE_URL}/alerts/current-week-negative-ppv`
+        );
+        const rows = Array.isArray(data) ? data : [];
+
+        const mapped = rows.map((r) => ({
+          alert_type: r.alert_status || "Negative Variance",
+          date_value: r.week_date,
+          severity: "Critical",
+          tooltip: `Avg variance: ${r.avg_variance_pct}% | Total: ${r.total_variance_amt} | SKUs: ${r.affected_skus_count} | Plants: ${r.affected_plants_count}`,
+          supplier_name: r.supplier_name,
+          marker_color_emoji: "🔴",
+        }));
+        setAlertsRaw(mapped);
+      } else {
+        const { data } = await axios.get(`${API_BASE_URL}/getAlerts`);
+        setAlertsRaw(Array.isArray(data) ? data : []);
+      }
     } catch {
       setAlertsRaw([]);
     }
@@ -1332,9 +1488,16 @@ const DataVisualizationSection = ({
     const checked = e.target.checked;
     setShowAlerts(checked);
     if (checked && alertsRaw.length === 0) {
-      await fetchAlerts();
+      await fetchAlerts(selectedPeriod);
     }
   };
+
+  useEffect(() => {
+    if (showAlerts) {
+      fetchAlerts(selectedPeriod);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPeriod]);
 
   /* -------- Global Events overlay -------- */
 
@@ -1402,6 +1565,10 @@ const DataVisualizationSection = ({
 
     try {
       setDownloadingForecastChart(true);
+      setExportingCapture(true);
+
+      // allow legend to switch to SVG mode
+      await new Promise((resolve) => setTimeout(resolve, 120));
 
       if (chartRef.current?.chart) {
         chartRef.current.chart.reflow();
@@ -1467,6 +1634,7 @@ const DataVisualizationSection = ({
       console.error("Failed to download PPV forecast chart", error);
       alert("Failed to download chart. Please try again.");
     } finally {
+      setExportingCapture(false);
       setDownloadingForecastChart(false);
     }
   };
@@ -1508,11 +1676,10 @@ const DataVisualizationSection = ({
     min = roundDown(min);
     max = roundUp(max);
 
-    // Anchor zero if data crosses it, but avoid forcing extra space below -8
-    if (max > 0 && min < 0) {
-      min = Math.max(min, -8);
-      max = Math.min(max, 8);
-    }
+    const extraPad = Math.max(0.5, Math.abs(max - min) * 0.05);
+    min -= extraPad;
+    max += extraPad;
+
     return { min, max, span: max - min };
   };
 
@@ -1646,13 +1813,16 @@ const DataVisualizationSection = ({
         alignColumns: false,
         padding: 0,
         margin: 14,
-        useHTML: true,
-        symbolWidth: 0,
-        symbolHeight: 0,
+        useHTML: !exportingCapture,
+        symbolWidth: exportingCapture ? undefined : 0,
+        symbolHeight: exportingCapture ? undefined : 0,
         itemDistance: 4,
         itemMarginTop: 2,
         itemMarginBottom: 0,
         labelFormatter: function () {
+          if (exportingCapture) {
+            return this.name || "";
+          }
           const color = this.color || "#4b5563";
           const name = this.name || "";
 
@@ -1735,12 +1905,13 @@ const DataVisualizationSection = ({
           fontWeight: "500",
         },
         formatter() {
-          const pts =
+          const ptsRaw =
             this.points && this.points.length
               ? this.points
               : this.point
               ? [this.point]
               : [];
+          const pts = dedupeForecastPoints(ptsRaw);
 
           if (!pts.length) return "";
 
@@ -1764,7 +1935,8 @@ const DataVisualizationSection = ({
           });
 
           if (showGlobal && pts.length) {
-            const firstPoint = pts[0];
+            const firstPoint =
+              pts.find((p) => p.series.type !== "scatter") || pts[0];
             const xIdx =
               (typeof firstPoint.x === "number" ? firstPoint.x : null) ??
               lineCategories.indexOf(this.x);
@@ -1836,7 +2008,39 @@ const DataVisualizationSection = ({
     xPlotBands,
     eventsByX,
     showGridLines,
+    exportingCapture,
   ]);
+
+  const dedupeForecastPoints = (points = []) => {
+    const scatterPoints = [];
+    const linePoints = [];
+
+    points.forEach((p) => {
+      if (p?.series?.type === "scatter") scatterPoints.push(p);
+      else linePoints.push(p);
+    });
+
+    const keepByBase = new Map();
+
+    linePoints.forEach((p) => {
+      const name = p?.series?.name || "";
+      const isForecast = name.endsWith(" Forecast");
+      const baseName = isForecast ? name.replace(/ Forecast$/, "") : name;
+      const existing = keepByBase.get(baseName);
+
+      if (!existing) {
+        keepByBase.set(baseName, { point: p, isForecast });
+        return;
+      }
+
+      if (existing.isForecast && !isForecast) {
+        keepByBase.set(baseName, { point: p, isForecast: false });
+      }
+    });
+
+    const keptLines = Array.from(keepByBase.values()).map((v) => v.point);
+    return [...scatterPoints, ...keptLines];
+  };
 
   useLayoutEffect(() => {
     chartRef.current?.chart?.reflow?.();
@@ -1892,7 +2096,11 @@ const DataVisualizationSection = ({
 
         {selectedTab === 0 && (
           <>
-            <SavingsBySupplier />
+            <SavingsBySupplier
+              hasFilters={hasSupplierFilters}
+              selectedLocations={supplierLocations}
+              allowedSupplierNames={allowedSupplierNames}
+            />
 
             <Box
               sx={{
@@ -1967,7 +2175,7 @@ const DataVisualizationSection = ({
                         onChange={(e) => setShowForecast(e.target.checked)}
                       />
                     }
-                    label="6 Months Forecast"
+                    label="Forecast"
                     sx={{
                       "& .MuiFormControlLabel-label": {
                         fontSize: "14px",
@@ -2071,6 +2279,7 @@ const DataVisualizationSection = ({
               supplierIds={supplierIds}
               supplierLocations={supplierLocations}
               selectedPeriod={selectedPeriod}
+              allowedSupplierNames={allowedSupplierNames}
             />
           </>
         )}
@@ -2113,6 +2322,8 @@ const DataVisualizationSection = ({
               plantIds={plantIds}
               countryIds={countryIds}
               stateIds={stateIds}
+              clearSignal={clearSignal}
+              hasFilters={hasSaqFilters}
             />
           </Box>
         )}
@@ -2460,6 +2671,7 @@ const SupplierDataTableSection = ({
   supplierLocations = [],
   selectedPeriod = "M",
   clearSignal = 0, // ✅ ADDED
+  allowedSupplierNames = [],
 }) => {
   const [rows, setRows] = useState([]);
   const [columns, setColumns] = useState([]);
@@ -2547,7 +2759,16 @@ const SupplierDataTableSection = ({
           `${API_BASE_URL}${endpoint}`,
           payload
         );
-        const arr = Array.isArray(data) ? data : [];
+        let arr = Array.isArray(data) ? data : [];
+
+        if (Array.isArray(allowedSupplierNames) && allowedSupplierNames.length) {
+          const allowedSet = new Set(
+            allowedSupplierNames.map((n) => String(n || "").trim())
+          );
+          arr = arr.filter((r) =>
+            allowedSet.has(String(r.supplier_name || "").trim())
+          );
+        }
 
         const keys = new Set();
         arr.forEach((r) => {
@@ -2607,6 +2828,7 @@ const SupplierDataTableSection = ({
     supplierIds,
     supplierLocations,
     selectedPeriod,
+    allowedSupplierNames,
   ]);
 
   const lastOfYearIdx = useMemo(
@@ -3350,6 +3572,31 @@ export const DemandProjectMonth = () => {
     );
   }, [filtersData.suppliers, selectedSupplierLocations]);
 
+  const allowedSupplierNames = useMemo(() => {
+    const all = filtersData.suppliers || [];
+    if (selectedSuppliers.length) {
+      const idSet = new Set(selectedSuppliers);
+      return all
+        .filter((s) => idSet.has(s.supplier_id))
+        .map((s) => s.supplier_name)
+        .filter(Boolean);
+    }
+
+    if (selectedSupplierLocations.length) {
+      const locSet = new Set(
+        selectedSupplierLocations.map((loc) => String(loc).toLowerCase())
+      );
+      return all
+        .filter((s) =>
+          locSet.has(String(s.supplier_country || "").toLowerCase())
+        )
+        .map((s) => s.supplier_name)
+        .filter(Boolean);
+    }
+
+    return [];
+  }, [filtersData.suppliers, selectedSuppliers, selectedSupplierLocations]);
+
   return (
     <Box>
       {/* Top AppBar */}
@@ -3650,6 +3897,7 @@ export const DemandProjectMonth = () => {
           skuIds={selectedSKUs}
           supplierIds={effectiveSupplierIds}
           supplierLocations={selectedSupplierLocations}
+          allowedSupplierNames={allowedSupplierNames}
           savingsCards={loadingSavings ? [] : savingsCards}
         />
       </Box>
