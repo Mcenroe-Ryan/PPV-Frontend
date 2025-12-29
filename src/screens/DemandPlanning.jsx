@@ -69,8 +69,8 @@ import DateFilter from "./components/DateFilter";
 import ChatBot from "./components/Chatbox";
 import SAQ from "./components/SAQ";
 import Chart from "./components/Messaging";
+import SideNavBar from "./components/Sidebar";
 
-// Highcharts
 import Highcharts from "highcharts";
 import HighchartsReact from "highcharts-react-official";
 import Scorecard from "./components/Scorecard";
@@ -186,7 +186,6 @@ const FALLBACK_COLORS = [
   "#f97316",
   "#14b8a6",
 ];
-/* ===================== Simple listbox for More menu ===================== */
 
 const Listbox = () => {
   const listItems = [{ id: 1, label: "Product Name" }];
@@ -255,8 +254,6 @@ const Listbox = () => {
     </Box>
   );
 };
-
-/* ===================== Savings by supplier (dummy UI) ===================== */
 
 const SAVINGS_SUPPLIER_DATA = [
   {
@@ -327,17 +324,12 @@ const SAVINGS_SUPPLIER_DATA = [
   },
 ];
 
-// helper to extract numeric value from "$3216.34" / "-$18.46"
 const numericSavings = (val) => {
   if (typeof val === "number") return val;
   const num = parseFloat(String(val).replace(/[^0-9.-]/g, ""));
   return Number.isFinite(num) ? num : 0;
 };
 
-// sort suppliers inside each country:
-// - green (positive) -> highest number on top
-// - red (negative)   -> highest (least negative) number on top
-// - positives above negatives when mixed
 const sortSuppliersBySavings = (data) =>
   data.map((c) => ({
     ...c,
@@ -1358,7 +1350,7 @@ const DataVisualizationSection = ({
     try {
       if (period === "M") {
         const { data } = await axios.get(
-          `${API_BASE_URL}/alerts/current-month-negative-ppv`
+          `${API_BASE_URL}/alerts/monthly-ppv`
         );
         const rows = Array.isArray(data) ? data : [];
         const monthStart = new Date();
@@ -1367,7 +1359,7 @@ const DataVisualizationSection = ({
         const iso = monthStart.toISOString().slice(0, 10);
 
         const mapped = rows.map((r) => ({
-          alert_type: r.alert_status || "Negative Variance",
+          alert_type: r.alert_status || "Positive Variance",
           date_value: iso,
           severity: "Critical",
           tooltip: `Avg variance: ${r.avg_variance_pct}% | Total: ${r.total_variance_amt}`,
@@ -1377,7 +1369,7 @@ const DataVisualizationSection = ({
         setAlertsRaw(mapped);
       } else if (period === "W") {
         const { data } = await axios.get(
-          `${API_BASE_URL}/alerts/current-week-negative-ppv`
+          `${API_BASE_URL}/alerts/weekly-ppv`
         );
         const rows = Array.isArray(data) ? data : [];
 
@@ -1517,9 +1509,10 @@ const DataVisualizationSection = ({
       return;
     }
 
-    const impactColor = () => hexToRgba(overlayColors.globalEvents, 0.35);
+    // Slightly darker (still uniform) overlay to keep bands visible without hiding lines
+    const impactColor = () => hexToRgba(overlayColors.globalEvents, 0.30);
 
-    const bands = [];
+    const bandsMap = new Map();
     const byX = {};
 
     globalRaw.forEach((ev, idx) => {
@@ -1529,19 +1522,21 @@ const DataVisualizationSection = ({
       if (xIdx === -1) return;
 
       const width = 0.32;
-      bands.push({
-        id: `ge-${idx}-${xIdx}`,
-        from: xIdx - width / 2,
-        to: xIdx + width / 2,
-        color: impactColor(ev.impact_level),
-        zIndex: 3,
-      });
+      if (!bandsMap.has(xIdx)) {
+        bandsMap.set(xIdx, {
+          id: `ge-${xIdx}`,
+          from: xIdx - width / 2,
+          to: xIdx + width / 2,
+          color: impactColor(ev.impact_level),
+          zIndex: 3,
+        });
+      }
 
       if (!byX[xIdx]) byX[xIdx] = [];
       byX[xIdx].push(ev);
     });
 
-    setXPlotBands(bands);
+    setXPlotBands(Array.from(bandsMap.values()));
     setEventsByX(byX);
   }, [
     showGlobal,
@@ -3144,6 +3139,8 @@ export const DemandProjectMonth = () => {
   };
   const handleCloseChatBot = () => setIsChatBotOpen(false);
 
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   /* -------- Fetch countries -------- */
 
   const fetchCountries = () => {
@@ -3611,14 +3608,7 @@ export const DemandProjectMonth = () => {
         }}
       >
         <Toolbar sx={{ justifyContent: "space-between" }}>
-          <Stack direction="row" alignItems="center" spacing={1.5}>
-            <IconButton color="inherit">
-              <img
-                alt="List"
-                src="https://c.animaapp.com/Jwk7dHU9/img/list.svg"
-                style={{ width: 30, height: 30 }}
-              />
-            </IconButton>
+          <Stack direction="row" alignItems="center" spacing={1.5} sx={{ pl: 5 }}>
             <Stack direction="row" alignItems="center" spacing={0.5}>
               <Box sx={{ width: 40, height: 35.69 }}>
                 <img
@@ -3647,7 +3637,7 @@ export const DemandProjectMonth = () => {
               </Stack>
             </Stack>
             <Stack direction="row" alignItems="center" sx={{ p: 2.5 }}>
-              {["M Project 1", "Demand"].map((item, idx, arr) => (
+              {["M Project 1", "PPV"].map((item, idx, arr) => (
                 <React.Fragment key={item}>
                   <Typography sx={{ color: "#ffffff", fontSize: "14px" }}>
                     {item}
@@ -3672,6 +3662,18 @@ export const DemandProjectMonth = () => {
           </Stack>
         </Toolbar>
       </AppBar>
+      <SideNavBar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      {sidebarOpen && (
+        <Box
+          onClick={() => setSidebarOpen(false)}
+          sx={{
+            position: "fixed",
+            inset: 0,
+            bgcolor: "rgba(0,0,0,0.18)",
+            zIndex: 1300,
+          }}
+        />
+      )}
 
       {/* Filters Row */}
       <Box

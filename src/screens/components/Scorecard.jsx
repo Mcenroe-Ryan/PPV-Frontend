@@ -39,10 +39,15 @@ const COLORS = {
   yellow500: "#EAB308",
 };
 
-/* -------------------------------------------------
-   API Base URL (from Vite env)
--------------------------------------------------- */
 const API_BASE_URL = import.meta.env.VITE_API_URL;
+
+const buildEmptyFactorData = () => ({
+  quantity: [],
+  rubberCost: [],
+  fuelWti: [],
+  fuelBrent: [],
+  fxRate: [],
+});
 
 const IconOperational = ({ color = COLORS.green600, size = 22 }) => (
   <Box
@@ -359,7 +364,6 @@ const ICON_DEFINITIONS = [
   { key: "env", Component: IconEnvironmental },
 ];
 
-// Radar axes and helpers for custom-drawn grid/lines
 const RADAR_AXES = [
   { key: "quality", label: "Quality" },
   { key: "cost", label: "Cost" },
@@ -378,9 +382,6 @@ const polarToPoint = (angleDeg, value) => {
   };
 };
 
-/* -------------------------------------------------
-   Header bar (Recommended + RC Score + dropdown + ⚙)
--------------------------------------------------- */
 const LegendHeader = ({ onOpenConfig, selectedMetric, onSelectMetric }) => {
   return (
     <Stack
@@ -395,7 +396,6 @@ const LegendHeader = ({ onOpenConfig, selectedMetric, onSelectMetric }) => {
         mb: 2,
       }}
     >
-      {/* Recommended pill */}
       <Stack direction="row" spacing={1} alignItems="center">
         <Box
           sx={{
@@ -412,7 +412,6 @@ const LegendHeader = ({ onOpenConfig, selectedMetric, onSelectMetric }) => {
 
       <Divider orientation="vertical" flexItem sx={{ height: 28 }} />
 
-      {/* Score legend */}
       <Typography sx={{ fontSize: 13, fontWeight: 600, color: COLORS.gray600 }}>
         Score:
       </Typography>
@@ -486,7 +485,6 @@ const LegendHeader = ({ onOpenConfig, selectedMetric, onSelectMetric }) => {
 
       <Divider orientation="vertical" flexItem sx={{ height: 28 }} />
 
-      {/* Dropdown – Balanced / Quality / Cost / Delivery / Risk / Compliance */}
       <Select
         value={selectedMetric}
         onChange={(e) => onSelectMetric(e.target.value)}
@@ -539,7 +537,6 @@ const LegendHeader = ({ onOpenConfig, selectedMetric, onSelectMetric }) => {
 
       <Divider orientation="vertical" flexItem sx={{ height: 28 }} />
 
-      {/* Settings icon – opens Score Configuration */}
       <SettingsIcon
         sx={{ color: COLORS.gray500, cursor: "pointer" }}
         onClick={onOpenConfig}
@@ -548,9 +545,6 @@ const LegendHeader = ({ onOpenConfig, selectedMetric, onSelectMetric }) => {
   );
 };
 
-/* -------------------------------------------------
-   Suppliers (Radar Cards)
--------------------------------------------------- */
 const SUPPLIERS = [
   {
     id: "gpi",
@@ -617,7 +611,6 @@ const SUPPLIERS = [
   },
 ];
 
-// map UI supplier -> backend supplier_id
 const SUPPLIER_ID_MAP = {
   gpi: 7,
   bharat: 8,
@@ -634,16 +627,13 @@ const EXPLAINABILITY_SECTION_COLORS = {
   "Exchange Rate Dollar/Rupee": "#C084FC",
 };
 
-/* -------------------------------------------------
-   Explainability bar cards (bottom row when tab = Explainability)
--------------------------------------------------- */
 const ExplainabilityCard = ({ title, color, factors }) => {
   const backgroundMap = {
-    "#22C55E": "#D9FBE4", // green
-    "#FB923C": "#FFE9D6", // orange
-    "#60A5FA": "#DBEAFE", // blue
-    "#818CF8": "#E0E7FF", // indigo
-    "#C084FC": "#F3E8FF", // purple
+    "#22C55E": "#D9FBE4", 
+    "#FB923C": "#FFE9D6", 
+    "#60A5FA": "#DBEAFE",
+    "#818CF8": "#E0E7FF", 
+    "#C084FC": "#F3E8FF", 
   };
   const bgColor = backgroundMap[color] || `${color}1A`;
   const numericValues =
@@ -674,7 +664,6 @@ const ExplainabilityCard = ({ title, color, factors }) => {
         justifyContent: "space-between",
       }}
     >
-      {/* Title */}
       <Typography
         noWrap
         sx={{
@@ -690,7 +679,6 @@ const ExplainabilityCard = ({ title, color, factors }) => {
         {title}
       </Typography>
 
-      {/* Horizontal bars with faint grid lines */}
       <Box
         sx={{
           position: "relative",
@@ -700,7 +688,6 @@ const ExplainabilityCard = ({ title, color, factors }) => {
           justifyContent: "center",
         }}
       >
-        {/* Vertical grid lines (0 / 100) */}
         {[0, 100].map((v) => (
           <Box
             key={v}
@@ -716,7 +703,6 @@ const ExplainabilityCard = ({ title, color, factors }) => {
           />
         ))}
 
-        {/* Bars */}
         <Box
           sx={{
             display: "flex",
@@ -727,7 +713,6 @@ const ExplainabilityCard = ({ title, color, factors }) => {
         >
           {factors.map((f, i) => (
             <Box key={i} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              {/* Label */}
               <Typography
                 sx={{
                   width: 105,
@@ -740,7 +725,6 @@ const ExplainabilityCard = ({ title, color, factors }) => {
                 {f.label}
               </Typography>
 
-              {/* Track */}
               <Box
                 sx={{
                   flex: 1,
@@ -750,7 +734,6 @@ const ExplainabilityCard = ({ title, color, factors }) => {
                   overflow: "hidden",
                 }}
               >
-                {/* Filled portion */}
                 <Box
                   sx={{
                     position: "absolute",
@@ -764,7 +747,6 @@ const ExplainabilityCard = ({ title, color, factors }) => {
                 />
               </Box>
 
-              {/* Numeric value */}
               <Typography
                 sx={{
                   width: 30,
@@ -780,7 +762,6 @@ const ExplainabilityCard = ({ title, color, factors }) => {
         </Box>
       </Box>
 
-      {/* X-axis labels: 0 / 50 / 100 */}
       <Box
         sx={{
           mt: 1,
@@ -802,12 +783,9 @@ const ExplainabilityCard = ({ title, color, factors }) => {
   );
 };
 
-/* -------------------------------------------------
-   Factors line/area chart cards (bottom row when tab = Factors)
-   NOW: Quantity card can use API data, others stay as before.
--------------------------------------------------- */
-const FactorCard = ({ title, color, gradient, yLabels, data }) => {
-  // If no dynamic data provided, fall back to your original static look
+const FactorCard = ({ title, color, gradient, yLabels = [], data }) => {
+  const fallbackLabels = yLabels.length ? yLabels : [100, 50, 0];
+
   if (!data || data.length === 0) {
     return (
       <Paper
@@ -822,7 +800,6 @@ const FactorCard = ({ title, color, gradient, yLabels, data }) => {
           position: "relative",
         }}
       >
-        {/* Card title */}
         <Typography
           sx={{
             fontWeight: 600,
@@ -837,9 +814,7 @@ const FactorCard = ({ title, color, gradient, yLabels, data }) => {
           {title}
         </Typography>
 
-        {/* Simple static SVG chart – matches your Figma style */}
         <Box sx={{ display: "flex", height: 180 }}>
-          {/* Y-axis labels */}
           <Box
             sx={{
               width: 35,
@@ -850,14 +825,13 @@ const FactorCard = ({ title, color, gradient, yLabels, data }) => {
               mr: 1,
             }}
           >
-            {yLabels.map((v) => (
+            {fallbackLabels.map((v) => (
               <Typography key={v} sx={{ fontSize: 11, color: "#94A3B8" }}>
                 {v}
               </Typography>
             ))}
           </Box>
 
-          {/* Chart area */}
           <Box sx={{ flex: 1, position: "relative" }}>
             <svg width="100%" height="150" viewBox="0 0 350 150">
               <defs>
@@ -867,7 +841,6 @@ const FactorCard = ({ title, color, gradient, yLabels, data }) => {
                 </linearGradient>
               </defs>
 
-              {/* Grid lines */}
               {[0, 37, 74, 111, 148, 185, 222, 259, 296, 333].map((x, i) => (
                 <line
                   key={i}
@@ -891,7 +864,6 @@ const FactorCard = ({ title, color, gradient, yLabels, data }) => {
                 />
               ))}
 
-              {/* Future forecast highlight */}
               <rect
                 x="280"
                 y="0"
@@ -901,7 +873,6 @@ const FactorCard = ({ title, color, gradient, yLabels, data }) => {
                 opacity="0.08"
               />
 
-              {/* Solid line (history) */}
               <path
                 d="M0,110 L50,90 L100,100 L150,80 L200,105 L250,85 L280,95"
                 fill="none"
@@ -909,7 +880,6 @@ const FactorCard = ({ title, color, gradient, yLabels, data }) => {
                 strokeWidth="2"
               />
 
-              {/* Dashed line (forecast) */}
               <path
                 d="M280,95 L310,100 L350,80"
                 fill="none"
@@ -918,14 +888,12 @@ const FactorCard = ({ title, color, gradient, yLabels, data }) => {
                 strokeDasharray="5,5"
               />
 
-              {/* Area under curve */}
               <path
                 d="M0,110 L50,90 L100,100 L150,80 L200,105 L250,85 L280,95 L350,80 L350,150 L0,150 Z"
                 fill={`url(#${gradient})`}
               />
             </svg>
 
-            {/* X-axis years */}
             <Box
               sx={{
                 position: "absolute",
@@ -948,22 +916,90 @@ const FactorCard = ({ title, color, gradient, yLabels, data }) => {
     );
   }
 
-  // Dynamic version using API data, but keeping the same visual style
   const width = 350;
   const height = 150;
 
-  const numericValues = data.map((d) => Number(d.y_value ?? 0));
-  const minVal = Math.min(...numericValues);
-  const maxVal = Math.max(...numericValues);
-  const range = maxVal - minVal || 1;
+  const rawValues = data
+    .map((d) => Number(d.y_value ?? d.value))
+    .filter((v) => Number.isFinite(v));
+  const nonZeroValues = rawValues.filter((v) => v !== 0);
+  const numericValues = nonZeroValues.length ? nonZeroValues : rawValues;
+
+  if (!numericValues.length) {
+    return (
+      <Paper
+        elevation={0}
+        sx={{
+          background: COLORS.white,
+          border: `1px solid ${COLORS.gray200}`,
+          borderRadius: "8px",
+          p: 1.5,
+          flex: 1,
+          height: 240,
+          position: "relative",
+        }}
+      >
+        <Typography
+          sx={{
+            fontWeight: 600,
+            fontSize: 15,
+            color: COLORS.gray700,
+            mb: 1,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {title}
+        </Typography>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: COLORS.gray600,
+            height: 180,
+          }}
+        >
+          No data
+        </Box>
+      </Paper>
+    );
+  }
+
+  const rawMin = Math.min(...numericValues);
+  const rawMax = Math.max(...numericValues);
+  const base = rawMax - rawMin || Math.abs(rawMax || rawMin) || 1;
+  const padding = base * 0.1;
+  const minVal = Math.max(0, rawMin - padding);
+  const maxVal = rawMax + padding;
+  const minRange = Math.max(base * 0.05, 0.0001);
+  const range = Math.max(maxVal - minVal, minRange);
 
   const verticalPadding = 15;
   const chartBottom = height - verticalPadding;
 
+  const hasZeroFilteredOut = nonZeroValues.length > 0;
+  const formatLabel = (v) => {
+    if (Math.abs(v) >= 1000) return Math.round(v).toLocaleString();
+    if (Math.abs(v) >= 100) return Math.round(v);
+    if (Math.abs(v) >= 10) return Number(v.toFixed(1));
+    return Number(v.toFixed(2));
+  };
+
   const points = data.map((d, index) => {
+    const numericVal = Number(d.y_value ?? d.value ?? 0);
+    const parsedVal = Number.isFinite(numericVal) ? numericVal : minVal;
+    const safeVal =
+      hasZeroFilteredOut && parsedVal === 0 && nonZeroValues.length
+        ? minVal
+        : parsedVal;
     const t = data.length === 1 ? 0 : index / (data.length - 1);
     const x = t * width;
-    const norm = (Number(d.y_value ?? 0) - minVal) / range;
+    const norm = Math.min(
+      1,
+      Math.max((safeVal - minVal) / range, 0)
+    );
     const y = chartBottom - norm * (height - 2 * verticalPadding);
     return { x, y, is_forecast: d.is_forecast };
   });
@@ -996,14 +1032,11 @@ const FactorCard = ({ title, color, gradient, yLabels, data }) => {
     futureRect = { xStart, w };
   }
 
-  const labels =
-    yLabels && yLabels.length
-      ? yLabels
-      : [
-          maxVal.toFixed(1),
-          ((maxVal + minVal) / 2).toFixed(1),
-          minVal.toFixed(1),
-        ];
+  const labels = [
+    formatLabel(maxVal),
+    formatLabel((maxVal + minVal) / 2),
+    formatLabel(minVal),
+  ];
 
   return (
     <Paper
@@ -1018,7 +1051,6 @@ const FactorCard = ({ title, color, gradient, yLabels, data }) => {
         position: "relative",
       }}
     >
-      {/* Card title */}
       <Typography
         sx={{
           fontWeight: 600,
@@ -1034,7 +1066,6 @@ const FactorCard = ({ title, color, gradient, yLabels, data }) => {
       </Typography>
 
       <Box sx={{ display: "flex", height: 180 }}>
-        {/* Y-axis labels */}
         <Box
           sx={{
             width: 35,
@@ -1052,7 +1083,6 @@ const FactorCard = ({ title, color, gradient, yLabels, data }) => {
           ))}
         </Box>
 
-        {/* Chart area */}
         <Box sx={{ flex: 1, position: "relative" }}>
           <svg width="100%" height="150" viewBox={`0 0 ${width} ${height}`}>
             <defs>
@@ -1062,7 +1092,6 @@ const FactorCard = ({ title, color, gradient, yLabels, data }) => {
               </linearGradient>
             </defs>
 
-            {/* Grid lines */}
             {[0, 37, 74, 111, 148, 185, 222, 259, 296, 333].map((x, i) => (
               <line
                 key={`v-${i}`}
@@ -1086,7 +1115,6 @@ const FactorCard = ({ title, color, gradient, yLabels, data }) => {
               />
             ))}
 
-            {/* Future forecast highlight */}
             {futureRect && (
               <rect
                 x={futureRect.xStart}
@@ -1098,13 +1126,10 @@ const FactorCard = ({ title, color, gradient, yLabels, data }) => {
               />
             )}
 
-            {/* Area under curve */}
             <path d={areaPath} fill={`url(#${gradient})`} />
 
-            {/* Solid line (history) */}
             <path d={pastPath} fill="none" stroke={color} strokeWidth="2" />
 
-            {/* Dashed line (forecast) */}
             {hasForecast && (
               <path
                 d={forecastPath}
@@ -1116,7 +1141,6 @@ const FactorCard = ({ title, color, gradient, yLabels, data }) => {
             )}
           </svg>
 
-          {/* X-axis years – keep same visual */}
           <Box
             sx={{
               position: "absolute",
@@ -1139,9 +1163,6 @@ const FactorCard = ({ title, color, gradient, yLabels, data }) => {
   );
 };
 
-/* -------------------------------------------------
-   Radar chart (custom pentagon)
--------------------------------------------------- */
 const RadarChart = ({ scores }) => {
   const axisAngles = RADAR_AXES.map((_, i) => -90 + i * 72);
   const levels = [20, 40, 60, 80, 100];
@@ -1171,7 +1192,6 @@ const RadarChart = ({ scores }) => {
       viewBox="0 0 100 100"
       sx={{ width: "100%", height: "100%" }}
     >
-      {/* Grid rings */}
       {gridPolygons.map((path, idx) => (
         <path
           key={idx}
@@ -1182,7 +1202,6 @@ const RadarChart = ({ scores }) => {
           opacity={idx === gridPolygons.length - 1 ? 0.35 : 1}
         />
       ))}
-      {/* Spokes */}
       {axisAngles.map((angle, idx) => {
         const p = polarToPoint(angle, 50);
         return (
@@ -1197,7 +1216,6 @@ const RadarChart = ({ scores }) => {
           />
         );
       })}
-      {/* Data polygon */}
       <path
         d={polygonPath}
         fill="#0EA5E9"
@@ -1206,7 +1224,6 @@ const RadarChart = ({ scores }) => {
         strokeWidth={1.6}
         strokeLinejoin="round"
       />
-      {/* Vertex markers */}
       {points.map((p, idx) => (
         <circle
           key={`marker-${idx}`}
@@ -1222,9 +1239,6 @@ const RadarChart = ({ scores }) => {
   );
 };
 
-/* -------------------------------------------------
-   Supplier Card (includes icons + radar)
--------------------------------------------------- */
 const SupplierCard = ({
   supplier,
   isActive,
@@ -1253,7 +1267,6 @@ const SupplierCard = ({
         position: "relative",
       }}
     >
-      {/* Header: radio + name + rating */}
       <Box
         sx={{
           position: "absolute",
@@ -1288,7 +1301,6 @@ const SupplierCard = ({
         </Box>
       </Box>
 
-      {/* Icons row (top-right) */}
       <Box
         sx={{
           position: "absolute",
@@ -1310,7 +1322,6 @@ const SupplierCard = ({
         ))}
       </Box>
 
-      {/* Radar + labels – tuned so blue line sits inside grid */}
       <Box
         sx={{
           position: "absolute",
@@ -1322,7 +1333,6 @@ const SupplierCard = ({
       >
         <RadarChart scores={supplier.scores} />
 
-        {/* Pentagon labels – match Figma wording/positions */}
         <Typography
           sx={{
             position: "absolute",
@@ -1395,7 +1405,6 @@ const SupplierCard = ({
         </Typography>
       </Box>
 
-      {/* Factors / Explainability tabs */}
       <Stack
         direction="row"
         sx={{ position: "absolute", bottom: 0, left: 0, width: "100%" }}
@@ -1429,9 +1438,6 @@ const SupplierCard = ({
   );
 };
 
-/* -------------------------------------------------
-   Score Configuration Sidebar
--------------------------------------------------- */
 const ScoreConfigSidebar = ({ open, values, onChange, onClose }) => {
   if (!open) return null;
 
@@ -1459,7 +1465,6 @@ const ScoreConfigSidebar = ({ open, values, onChange, onClose }) => {
 
   return (
     <>
-      {/* Dark overlay */}
       <Box
         onClick={onClose}
         sx={{
@@ -1470,7 +1475,6 @@ const ScoreConfigSidebar = ({ open, values, onChange, onClose }) => {
         }}
       />
 
-      {/* Right panel */}
       <Box
         sx={{
           position: "fixed",
@@ -1485,7 +1489,6 @@ const ScoreConfigSidebar = ({ open, values, onChange, onClose }) => {
           flexDirection: "column",
         }}
       >
-        {/* Header */}
         <Box
           sx={{
             px: 3,
@@ -1513,7 +1516,6 @@ const ScoreConfigSidebar = ({ open, values, onChange, onClose }) => {
           </IconButton>
         </Box>
 
-        {/* Sliders */}
         <Box sx={{ flex: 1, px: 3, pt: 3 }}>
           <Stack spacing={3}>
             {fields.map((f) => (
@@ -1589,7 +1591,6 @@ const ScoreConfigSidebar = ({ open, values, onChange, onClose }) => {
           </Stack>
         </Box>
 
-        {/* Submit button */}
         <Box
           sx={{
             borderTop: `1px solid ${COLORS.gray200}`,
@@ -1618,10 +1619,21 @@ const ScoreConfigSidebar = ({ open, values, onChange, onClose }) => {
   );
 };
 
-/* -------------------------------------------------
-   Main Screen
--------------------------------------------------- */
-export default function Scorecard() {
+export default function Scorecard({
+  supplierIds = [],
+  skuIds = [],
+  plantIds = [],
+  countryIds = [],
+  stateIds = [],
+}) {
+  const hasActiveFilters = [
+    supplierIds,
+    skuIds,
+    plantIds,
+    countryIds,
+    stateIds,
+  ].some((list) => Array.isArray(list) && list.length > 0);
+
   const [activeSupplier, setActiveSupplier] = useState("gpi");
   const [activeTab, setActiveTab] = useState("factors");
   const [scoreView, setScoreView] = useState("Balanced");
@@ -1635,14 +1647,7 @@ export default function Scorecard() {
     compliance: 100,
   });
 
-  // Dynamic data for the Factors charts, grouped by metric_name
-  const [factorData, setFactorData] = useState({
-    quantity: [],
-    rubberCost: [],
-    fuelWti: [],
-    fuelBrent: [],
-    fxRate: [],
-  });
+  const [factorData, setFactorData] = useState(buildEmptyFactorData);
   const [explainabilityData, setExplainabilityData] = useState([]);
   const [explainabilityLoading, setExplainabilityLoading] = useState(false);
 
@@ -1651,8 +1656,12 @@ export default function Scorecard() {
     setActiveTab(tab);
   };
 
-  // Fetch all metric series for a supplier, then split by metric_name
   useEffect(() => {
+    if (!hasActiveFilters) {
+      setFactorData(buildEmptyFactorData());
+      return;
+    }
+
     if (activeTab !== "factors") return;
 
     const backendSupplierId = SUPPLIER_ID_MAP[activeSupplier];
@@ -1668,50 +1677,40 @@ export default function Scorecard() {
       .then((res) => {
         const rows = Array.isArray(res.data) ? res.data : [];
 
-        const grouped = {
-          quantity: [],
-          rubberCost: [],
-          fuelWti: [],
-          fuelBrent: [],
-          fxRate: [],
-        };
+        const grouped = buildEmptyFactorData();
 
-        // 1) First group non–raw-material metrics normally
         rows.forEach((row) => {
-          const metric = row.metric_name || "";
-          switch (metric) {
-            case "Quantity":
-              grouped.quantity.push(row);
-              break;
+          const metricRaw = row.metric_name || "";
+          const metric = metricRaw.toLowerCase();
 
-            case "Fuel Cost (WTI)":
-            case "Fuel Cost (WTI) in $":
-              grouped.fuelWti.push(row);
-              break;
+          if (metric === "quantity") {
+            grouped.quantity.push(row);
+            return;
+          }
 
-            case "Fuel Cost (Brent)":
-            case "Fuel Cost (Brent) in $":
-              grouped.fuelBrent.push(row);
-              break;
+          if (metric.includes("fuel cost (wti")) {
+            grouped.fuelWti.push(row);
+            return;
+          }
 
-            case "Exchange Rate Dollar/Euro":
-              grouped.fxRate.push(row);
-              break;
+          if (metric.includes("fuel cost (brent")) {
+            grouped.fuelBrent.push(row);
+            return;
+          }
 
-            default:
-              // raw materials and other metrics handled below
-              break;
+          if (metric.startsWith("exchange rate dollar/")) {
+            grouped.fxRate.push(row);
+            return;
           }
         });
 
-        // 2) Combine ALL raw-material metrics (3 types) into one series
-        //    Any metric_name that starts with "Raw Material -" will be included
         const rawMaterialMap = new Map();
 
         rows.forEach((row) => {
-          if (!row.metric_name?.startsWith("Raw Material -")) return;
+          if (!row.metric_name?.toLowerCase().startsWith("raw material -"))
+            return;
 
-          const key = row.date_value; // group by date
+          const key = row.date_value; 
           const y = Number(row.y_value ?? 0);
 
           if (!rawMaterialMap.has(key)) {
@@ -1724,14 +1723,11 @@ export default function Scorecard() {
           } else {
             const existing = rawMaterialMap.get(key);
             existing.y_value += y;
-            // mark as forecast if any of the components is forecast
             existing.is_forecast = existing.is_forecast || !!row.is_forecast;
           }
         });
 
         grouped.rubberCost = Array.from(rawMaterialMap.values());
-
-        // 3) Sort each series by date
         Object.keys(grouped).forEach((key) => {
           grouped[key].sort(
             (a, b) => new Date(a.date_value) - new Date(b.date_value)
@@ -1749,12 +1745,18 @@ export default function Scorecard() {
           fuelBrent: [],
           fxRate: [],
         });
-      });
+    });
 
     return () => controller.abort();
-  }, [activeSupplier, activeTab]);
+  }, [activeSupplier, activeTab, hasActiveFilters]);
 
   useEffect(() => {
+    if (!hasActiveFilters) {
+      setExplainabilityData([]);
+      setExplainabilityLoading(false);
+      return;
+    }
+
     if (activeTab !== "explain") return;
     const backendSupplierId = SUPPLIER_ID_MAP[activeSupplier];
     if (!backendSupplierId) return;
@@ -1817,7 +1819,28 @@ export default function Scorecard() {
       .finally(() => setExplainabilityLoading(false));
 
     return () => controller.abort();
-  }, [activeTab, activeSupplier]);
+  }, [activeTab, activeSupplier, hasActiveFilters]);
+
+  if (!hasActiveFilters) {
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          bgcolor: COLORS.gray50,
+          border: `1px dashed ${COLORS.gray200}`,
+          borderRadius: 1,
+          minHeight: 320,
+          width: "100%",
+        }}
+      >
+        <Typography sx={{ color: COLORS.gray600, fontSize: 15 }}>
+          No scorecard data found.
+        </Typography>
+      </Box>
+    );
+  }
 
   return (
     <Box
@@ -1831,19 +1854,16 @@ export default function Scorecard() {
         pb: 2,
       }}
     >
-      {/* Header strip */}
       <LegendHeader
         onOpenConfig={() => setIsConfigOpen(true)}
         selectedMetric={scoreView}
         onSelectMetric={setScoreView}
       />
 
-      {/* "Recommended" label under header */}
       <Typography sx={{ ml: 19, mb: 1, fontSize: 16, color: COLORS.blue700 }}>
         Recommended
       </Typography>
 
-      {/* Radar cards row */}
       <Stack direction="row" spacing={2}>
         {SUPPLIERS.map((s) => (
           <SupplierCard
@@ -1857,48 +1877,37 @@ export default function Scorecard() {
         ))}
       </Stack>
 
-      {/* Factors or Explainability row (bottom) */}
       <Box sx={{ mt: 3 }}>
         {activeTab === "factors" ? (
           <Stack direction="row" spacing={1.5}>
-            {/* Quantity */}
             <FactorCard
               title="Quantity"
               color="#22C55E"
               gradient="g1"
-              yLabels={[3200, 1600, 0]}
               data={factorData.quantity}
             />
-            {/* Raw Material - Rubber / Polymer Cost */}
             <FactorCard
               title="Raw Material - Rubber / Polymer Cost in ($)"
               color="#FB923C"
               gradient="g2"
-              yLabels={[100, 50, 0]}
               data={factorData.rubberCost}
             />
-            {/* Fuel Cost (WTI) */}
             <FactorCard
               title="Fuel Cost (WTI) in $"
               color="#60A5FA"
               gradient="g3"
-              yLabels={[100, 50, 0]}
               data={factorData.fuelWti}
             />
-            {/* Fuel Cost (Brent) */}
             <FactorCard
               title="Fuel Cost (Brent) in $"
               color="#818CF8"
               gradient="g4"
-              yLabels={[100, 50, 0]}
               data={factorData.fuelBrent}
             />
-            {/* Exchange Rate */}
             <FactorCard
               title="Exchange Rate Dollar/Euro"
               color="#C084FC"
               gradient="g5"
-              yLabels={[1.3, 1.1, 0]}
               data={factorData.fxRate}
             />
           </Stack>
@@ -1926,7 +1935,6 @@ export default function Scorecard() {
         )}
       </Box>
 
-      {/* Score Configuration sidebar + overlay */}
       <ScoreConfigSidebar
         open={isConfigOpen}
         values={scoreConfig}

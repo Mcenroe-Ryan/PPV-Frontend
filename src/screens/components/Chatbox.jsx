@@ -220,7 +220,6 @@ const ChatBot = ({ onClose }) => {
         position: "relative",
       }}
     >
-      {/* Header */}
       <Box
         sx={{
           bgcolor: "white",
@@ -259,8 +258,6 @@ const ChatBot = ({ onClose }) => {
           </IconButton>
         </Box>
       </Box>
-
-      {/* Messages */}
       <Box
         sx={{
           flex: 1,
@@ -394,8 +391,6 @@ const ChatBot = ({ onClose }) => {
         })}
         <Box ref={messagesEndRef} />
       </Box>
-
-      {/* Input */}
       <Box
         sx={{
           p: 3,

@@ -6,7 +6,7 @@ import SideNavBar from "./Sidebar";
 
 const Layout = ({ children }) => {
   const location = useLocation();
-  const sidebarRoutes = ["/dashboard", "/addNewProject"];
+  const sidebarRoutes = ["/dashboard", "/addNewProject", "/variance-forecast", "/ppv", "/demand", "/import-load-data"];
   const showSidebar = sidebarRoutes.includes(location.pathname);
 
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
@@ -55,8 +55,8 @@ const Layout = ({ children }) => {
           <IconButton
             onClick={() => setSidebarOpen(true)}
             sx={{
-              position: "fixed",
-              top: 16,
+              position: "absolute",
+              top: 10,
               left: 16,
               zIndex: 1300,
               bgcolor: "#fff",

@@ -38,8 +38,6 @@ import {
   Customized,
 } from "recharts";
 
-/* ==========================  CONFIG & CONSTANTS  =========================== */
-
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 const COLOR_STANDARD = "#DB2777";
@@ -138,10 +136,6 @@ const hsvToHex = ({ h, s, v }) => {
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 };
 
-/**
- * Default SAQ filter values when parent doesn't pass anything
- * or passes empty arrays.
- */
 const DEFAULT_SAQ_FILTERS = {
   startDate: "2024-05-30",
   endDate: "2026-06-30",
@@ -151,8 +145,6 @@ const DEFAULT_SAQ_FILTERS = {
   plantIds: [15],
   supplierIds: [7],
 };
-
-/* ==============================  HELPERS  ================================== */
 
 const num = (v) => (Number.isFinite(+v) ? +v : 0);
 
@@ -227,11 +219,6 @@ function YearLabels({ xAxisMap, yearSpans }) {
   );
 }
 
-/**
- * Format the X-axis label so that:
- * - First month of each year -> "Jun 2024"
- * - Remaining months of same year -> "Jul 24", "Aug 24", ...
- */
 const formatXAxisLabel = (d, idx, arr) => {
   const yearFull = d.year.toString();
   const yearShort = yearFull.slice(-2);
@@ -239,11 +226,9 @@ const formatXAxisLabel = (d, idx, arr) => {
 
   const prevYear = arr[idx - 1]?.year;
   if (prevYear !== d.year) {
-    // first month of a new year
     return `${d.monthShort} ${yearFull}`;
   }
 
-  // same year as previous -> use 2-digit year
   return `${d.monthShort} ${yearShort}`;
 };
 
@@ -328,8 +313,6 @@ const ChartTooltip = ({ active, payload, label }) => {
   );
 };
 
-/* ==============================  MAIN COMPONENT  =========================== */
-
 export default function SAQ({
   startDate,
   endDate,
@@ -349,7 +332,7 @@ export default function SAQ({
   const [showStandardForecast, setShowStandardForecast] = useState(true);
   const [showActual, setShowActual] = useState(true);
   const [showActualForecast, setShowActualForecast] = useState(true);
-  const [showQuantity, setShowQuantity] = useState(true); // actual quantity
+  const [showQuantity, setShowQuantity] = useState(true);
   const [showQuantityForecast, setShowQuantityForecast] = useState(true);
 
   const [fullscreen, setFullscreen] = useState(false);
@@ -494,8 +477,6 @@ export default function SAQ({
 
     try {
       setDownloadingChart(true);
-
-      // Wait for any pending renders to complete
       await new Promise((resolve) => setTimeout(resolve, 800));
 
       const element = chartCaptureRef.current;
@@ -509,7 +490,6 @@ export default function SAQ({
         width: element.scrollWidth,
         height: element.scrollHeight,
         onclone: (clonedDoc) => {
-          // Force all SVG elements to be visible and properly sized
           const chartContainer = clonedDoc.querySelector(".recharts-wrapper");
           if (chartContainer) {
             chartContainer.style.overflow = "visible";
@@ -521,7 +501,6 @@ export default function SAQ({
             svg.style.display = "block";
           });
 
-          // Ensure all paths are visible (for lines)
           const paths = clonedDoc.querySelectorAll("path");
           paths.forEach((path) => {
             if (path.style.visibility === "hidden") {
@@ -529,7 +508,6 @@ export default function SAQ({
             }
           });
 
-          // Ensure all lines are visible
           const lines = clonedDoc.querySelectorAll("line");
           lines.forEach((line) => {
             if (line.style.visibility === "hidden") {
@@ -537,7 +515,6 @@ export default function SAQ({
             }
           });
 
-          // Ensure bars are visible
           const rects = clonedDoc.querySelectorAll("rect");
           rects.forEach((rect) => {
             if (rect.style.visibility === "hidden") {
@@ -563,8 +540,6 @@ export default function SAQ({
       setDownloadingChart(false);
     }
   };
-
-  /* =======================  EFFECTIVE FILTERS (WITH DEFAULTS)  ======================= */
 
   const effectiveFilters = useMemo(() => {
     if (!hasFilters) return null;
@@ -603,9 +578,8 @@ export default function SAQ({
   useEffect(() => {
     setRows([]);
     setLoading(false);
+    setFullscreen(false);
   }, [clearSignal]);
-
-  /* ============================  FETCH DATA  =============================== */
 
   useEffect(() => {
     if (!effectiveFilters) {
@@ -625,8 +599,6 @@ export default function SAQ({
     } = effectiveFilters;
 
     if (!effStart || !effEnd) return;
-
-    // Normalize to a single numeric supplier_id
     let supplierId = null;
 
     if (Array.isArray(effSupplierIds) && effSupplierIds.length > 0) {
@@ -636,7 +608,7 @@ export default function SAQ({
     }
 
     if (!Number.isFinite(supplierId) || supplierId <= 0) {
-      supplierId = DEFAULT_SAQ_FILTERS.supplierIds[0]; // safety net
+      supplierId = DEFAULT_SAQ_FILTERS.supplierIds[0];
     }
 
     const fetchData = async () => {
@@ -651,8 +623,6 @@ export default function SAQ({
           plant_ids: effPlantIds,
           sku_ids: effSkuIds,
         };
-
-        console.log("📤 SAQ payload:", payload);
 
         const { data } = await axios.post(`${API_BASE_URL}/saq/chart`, payload);
 
@@ -672,7 +642,7 @@ export default function SAQ({
 
         setRows(filtered);
       } catch (error) {
-        console.error("❌ Error fetching SAQ chart:", error);
+        console.error("Error fetching SAQ chart:", error);
         setRows([]);
       } finally {
         setLoading(false);
@@ -682,7 +652,8 @@ export default function SAQ({
     fetchData();
   }, [effectiveFilters]);
 
-  /* ===========================  PROCESS DATA  ============================== */
+  const showFullscreenButton =
+    hasFilters && effectiveFilters && rows.length > 0;
 
   const normalized = useMemo(
     () =>
@@ -716,16 +687,10 @@ export default function SAQ({
       xLabel: formatXAxisLabel(d, idx, arr),
       iso: d.iso,
       year: d.year,
-
-      // Quantity
       quantity_hist: d.isHist ? d.qty : null,
       quantity_fore: !d.isHist ? d.qty : null,
-
-      // Standard Price
       standard_hist: d.isHist ? d.std : null,
       standard_fore: !d.isHist || idx === lastHistIdx ? d.std : null,
-
-      // Actual Price
       actual_hist: d.isHist ? d.act : null,
       actual_fore: !d.isHist || idx === lastHistIdx ? d.act : null,
     }));
@@ -765,8 +730,6 @@ export default function SAQ({
       months,
     }));
   }, [normalized]);
-
-  /* ==============================  CHART RENDER HELPER  ==================== */
 
   const renderChartContent = () => {
     if (loading) {
@@ -962,12 +925,9 @@ export default function SAQ({
     );
   };
 
-  /* ==============================  UI  ===================================== */
-
   return (
     <Box sx={{ pt: 1.3, px: 2, pb: 2, fontFamily: FONT_MONO }}>
       <Box ref={chartCaptureRef} sx={{ width: "100%" }}>
-        {/* Metric + Forecast legends + Top-right Icons */}
         {hasFilters && (
           <Box
             sx={{
@@ -980,7 +940,6 @@ export default function SAQ({
               flexWrap: "wrap",
             }}
           >
-        {/* Legend-like metric toggles + forecast chips (left) */}
         <Box
           sx={{
             display: "flex",
@@ -988,7 +947,6 @@ export default function SAQ({
             flexWrap: "wrap",
           }}
         >
-          {/* Main metrics */}
           {[
             {
               label: "Standard Price ($)",
@@ -1052,8 +1010,6 @@ export default function SAQ({
               </Typography>
             </Box>
           ))}
-
-          {/* Forecast legends */}
           {[
             {
               label: "Quantity Forecast",
@@ -1117,8 +1073,6 @@ export default function SAQ({
             </Box>
           ))}
         </Box>
-
-        {/* Icons on the right */}
         <Box
           sx={{
             display: "flex",
@@ -1149,23 +1103,21 @@ export default function SAQ({
         </Box>
       </Box>
       )}
-
-        {/* Chart */}
         <Paper variant="outlined" sx={{ mt: 2, p: 2, borderRadius: 2 }}>
-          <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>
-            <IconButton
-              size="small"
-              onClick={() => setFullscreen(true)}
-              aria-label="Fullscreen chart"
-            >
-              <FullscreenIcon fontSize="small" />
-            </IconButton>
-          </Box>
+          {showFullscreenButton && (
+            <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>
+              <IconButton
+                size="small"
+                onClick={() => setFullscreen(true)}
+                aria-label="Fullscreen chart"
+              >
+                <FullscreenIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          )}
           <Box>{renderChartContent()}</Box>
         </Paper>
       </Box>
-
-      {/* Fullscreen dialog */}
       <Dialog fullScreen open={fullscreen} onClose={() => setFullscreen(false)}>
         <Box
           sx={{
@@ -1195,7 +1147,6 @@ export default function SAQ({
         </Box>
       </Dialog>
 
-      {/* Table */}
       <Paper variant="outlined" sx={{ mt: 3, borderRadius: 2 }}>
         <TableContainer sx={{ overflowX: "auto" }}>
           <Table

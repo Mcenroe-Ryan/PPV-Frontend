@@ -30,7 +30,6 @@ export default function DateFilter({ onDateChange, disabled = false }) {
   const [range, setRange] = useState(defaultRange);
   const [tempRange, setTempRange] = useState(defaultRange);
 
-  // Inputs start empty so placeholders show
   const [hasUserSelected, setHasUserSelected] = useState(false);
   const [startInput, setStartInput] = useState(""); 
   const [endInput, setEndInput] = useState(""); 
@@ -152,7 +151,6 @@ export default function DateFilter({ onDateChange, disabled = false }) {
           </Typography>
         </Stack>
 
-        {/* Start & End Date Input Row */}
         <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
           <Box sx={{ flex: 0.5, minWidth: 120 }}>
             <Typography
@@ -200,7 +198,6 @@ export default function DateFilter({ onDateChange, disabled = false }) {
           </Box>
         </Stack>
 
-        {/* Calendar */}
         <DateRange
           editableDateInputs
           onChange={(item) => {
@@ -215,7 +212,6 @@ export default function DateFilter({ onDateChange, disabled = false }) {
           disabled={disabled}
         />
 
-        {/* Footer Buttons */}
         <Box
           sx={{ display: "flex", justifyContent: "flex-end", gap: 1, mt: 2 }}
         >

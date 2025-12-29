@@ -29,45 +29,45 @@ const SideNavBar = ({ open, onClose }) => {
   const menuItems = [
     {
       icon: <BarChartIcon fontSize="small" />,
-      text: "Demand",
-      path: "/demand",
-      enabled: true, // Active
+      text: "Variance Forecast",
+      path: "/ppv",
+      enabled: true,
     },
     { 
       icon: <InventoryIcon fontSize="small" />, 
       text: "Procurement",
-      enabled: false, // Disabled
+      enabled: false,
     },
     { 
       icon: <AssignmentIcon fontSize="small" />, 
       text: "Inventory",
-      enabled: false, // Disabled
+      enabled: false,
     },
     { 
       icon: <NewspaperIcon fontSize="small" />, 
       text: "Promotion & Marketing",
-      enabled: false, // Disabled
+      enabled: false,
     },
     { 
       icon: <AccountBalanceWalletIcon fontSize="small" />, 
       text: "Finance",
-      enabled: false, // Disabled
+      enabled: false,
     },
     {
       icon: <CloudUploadIcon fontSize="small" />,
       text: "Import / Load Data",
       path: "/import-load-data",
-      enabled: true, // Active
+      enabled: true,
     },
     { 
       icon: <DescriptionIcon fontSize="small" />, 
       text: "Reports",
-      enabled: false, // Disabled
+      enabled: false,
     },
     { 
       icon: <SettingsIcon fontSize="small" />, 
       text: "Settings",
-      enabled: false, // Disabled
+      enabled: false,
     },
   ];
 
@@ -105,7 +105,7 @@ const SideNavBar = ({ open, onClose }) => {
           />
           <Box>
             <Typography variant="subtitle2" fontWeight={600} color="#626262">
-              PPV Forecast
+              PPV
             </Typography>
             <Typography variant="caption" color="text.secondary" fontSize={10}>
               Business Planner

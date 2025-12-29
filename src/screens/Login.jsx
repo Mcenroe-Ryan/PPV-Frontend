@@ -3,6 +3,7 @@ import {
   BrowserRouter as Router,
   Routes,
   Route,
+  Navigate,
   useNavigate,
 } from "react-router-dom";
 import {
@@ -720,7 +721,9 @@ const AuthPages = () => (
         <Route path="/verify" element={<LoginVerify />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/addNewProject" element={<AddNewProject />} />
-        <Route path="/demand" element={<DemandProjectMonth />} />
+        <Route path="/ppv" element={<DemandProjectMonth />} />
+        <Route path="/demand" element={<Navigate to="/ppv" replace />} />
+        <Route path="/variance-forecast" element={<DemandProjectMonth />} />
         <Route path="/import-load-data" element={<ImportProfilesData />} />
         <Route path="/spreadsheet" element={<AddNewProjectSpreadsheet />} />
         <Route path="/saq" element ={<SAQ /> } />
